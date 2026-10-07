@@ -1,3 +1,4 @@
+import { FIELD_WIDTH } from './geometry'
 import { uid } from './id'
 import type { FormatId, Player, Role, Shape } from './types'
 
@@ -46,7 +47,8 @@ export function styleFor(role: Role, label: string): { shape: Shape; color: stri
   }
 }
 
-const C = 160 / 3
+/** Yard line of the ball and the center, halfway between the sidelines. */
+const C = FIELD_WIDTH / 2
 
 function spot(label: string, role: Role, x: number, y: number): Spot {
   return { label, role, x, y }

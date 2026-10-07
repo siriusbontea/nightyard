@@ -17,6 +17,8 @@ import {
   showcasePlay,
   translatePlayer,
 } from './play'
+import { defenseFor, formationsFor } from './formations'
+import { FIELD_WIDTH, PLAYER_R } from './geometry'
 import { presetPath } from './presets'
 import { FORMATS, type Player, type Stroke } from './types'
 
@@ -28,6 +30,39 @@ describe('play model', () => {
       const play = createPlay({ format: format.id, name: format.label })
       expect(offenseCount(play)).toBe(format.offense)
       expect(play.players.filter((player) => player.side === 'defense')).toHaveLength(0)
+    }
+  })
+
+  it('centers the center and quarterback on the ball and keeps every alignment inside the sidelines', () => {
+    const midfield = FIELD_WIDTH / 2
+    for (const format of FORMATS) {
+      for (const formation of formationsFor(format.id)) {
+        const play = createPlay({ format: format.id, formationId: formation.id, name: formation.name })
+        const center = play.players.find((player) => player.role === 'center')
+        const qb = play.players.find((player) => player.role === 'qb')
+        expect(center?.x, `${format.id} ${formation.id} center`).toBeCloseTo(midfield, 5)
+        expect(qb?.x, `${format.id} ${formation.id} quarterback`).toBeCloseTo(midfield, 5)
+        for (const player of play.players) {
+          expect(player.x, `${format.id} ${player.label}`).toBeGreaterThanOrEqual(PLAYER_R)
+          expect(player.x, `${format.id} ${player.label}`).toBeLessThanOrEqual(FIELD_WIDTH - PLAYER_R)
+        }
+      }
+      for (const player of defenseFor(format.id)) {
+        expect(player.x, `${format.id} defense ${player.label}`).toBeGreaterThanOrEqual(PLAYER_R)
+        expect(player.x, `${format.id} defense ${player.label}`).toBeLessThanOrEqual(FIELD_WIDTH - PLAYER_R)
+      }
+    }
+
+    const starter = showcasePlay()
+    const ballX = midfield
+    const center = starter.players.find((player) => player.role === 'center')!
+    expect(Math.abs(center.x - ballX)).toBeLessThan(0.05)
+    for (const stroke of starter.strokes) {
+      const samples = [...stroke.points, ...stroke.curves.filter((point): point is { x: number; y: number } => point !== null)]
+      for (const point of samples) {
+        expect(point.x, stroke.preset ?? stroke.kind).toBeGreaterThan(0.5)
+        expect(point.x, stroke.preset ?? stroke.kind).toBeLessThan(FIELD_WIDTH - 0.5)
+      }
     }
   })
 
