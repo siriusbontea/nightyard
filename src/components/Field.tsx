@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'preact/hooks'
 import { applyPositions, fieldMarkup } from '../fieldMarkup'
-import { FIELD_WIDTH, clamp, dist, moveStrokePoint, setStrokeCurve, simplifyPath, viewSize, type Camera } from '../geometry'
+import { DRAW_PIXELS, FIELD_WIDTH, clamp, dist, moveStrokePoint, setStrokeCurve, simplifyPath, viewSize, type Camera } from '../geometry'
 import { clientToField, hitTest } from '../hit'
 import { playerAtTime } from '../playback'
 import { replaceStroke, setStroke, translatePlayer } from '../play'
@@ -198,7 +198,7 @@ export function Field(props: FieldProps) {
       const point = clientToField(svg, event.clientX, event.clientY, current.camera)
       if (gesture.type === 'draw') {
         const last = gesture.raw[gesture.raw.length - 1]
-        if (dist(last, point) >= 0.28) {
+        if (dist(last, point) >= Math.max(0.05, yardsFor(DRAW_PIXELS.sample))) {
           gesture.raw.push(point)
           gesture.moved = true
         }
@@ -245,7 +245,12 @@ export function Field(props: FieldProps) {
           paint(finished.snapshot, current.tool === 'move', 0)
           return
         }
-        const simple = simplifyPath(finished.raw, 0.7)
+        const simple = simplifyPath(finished.raw, Math.max(0.12, yardsFor(DRAW_PIXELS.epsilon)), {
+          cornerWindow: yardsFor(DRAW_PIXELS.cornerWindow),
+          cornerDegrees: DRAW_PIXELS.cornerDegrees,
+          minLeg: yardsFor(DRAW_PIXELS.minLeg),
+          maxPoints: DRAW_PIXELS.maxPoints,
+        })
         const player = finished.snapshot.players.find((item) => item.id === finished.playerId)
         if (!player || simple.points.length < 2) {
           current.onSelect(finished.playerId, null)
@@ -301,6 +306,7 @@ export function Field(props: FieldProps) {
       ref={svgRef}
       class="field"
       viewBox={`0 0 ${size.w} ${size.h}`}
+      preserveAspectRatio="xMidYMid meet"
       role="img"
       aria-label={`${props.play.name} field`}
     />

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   cameraForBox,
+  FIELD_WIDTH,
   dist,
   distanceToStroke,
   fieldToSvg,
@@ -51,11 +52,19 @@ describe('route geometry', () => {
     expect(fieldToSvg({ x: 0, y: 10 }, camera).y).toBe(200)
   })
 
-  it('keeps a tall phone camera inside a readable yard window', () => {
-    const camera = cameraForBox(360, 640)
-    expect(camera.ahead + camera.behind).toBeGreaterThanOrEqual(44)
-    expect(camera.ahead + camera.behind).toBeLessThanOrEqual(70)
-    expect(camera.behind).toBeGreaterThanOrEqual(14)
+  it('fills a tall phone with the same aspect as the frame and stays on the marked field', () => {
+    const width = 360
+    const height = 640
+    const camera = cameraForBox(width, height, 50)
+    const depth = camera.ahead + camera.behind
+    expect(depth).toBeCloseTo((FIELD_WIDTH * height) / width, 5)
+    expect(camera.ahead).toBeLessThanOrEqual(60)
+    expect(-camera.behind).toBeGreaterThanOrEqual(-60)
+    expect(camera.behind).toBeGreaterThan(8)
+    const wide = cameraForBox(980, 420, 50)
+    expect(wide.ahead + wide.behind).toBeCloseTo((FIELD_WIDTH * 420) / 980, 5)
+    expect(wide.ahead).toBeGreaterThan(0)
+    expect(wide.behind).toBeGreaterThan(0)
   })
 
   it('sends slants inside and outs outside', () => {

@@ -174,25 +174,33 @@ function yardArrow(x: number, y: number, dir: 'up' | 'down', scale: number): str
   return `M${x.toFixed(1)} ${tip.toFixed(1)} L${(x - half).toFixed(1)} ${base.toFixed(1)} L${(x + half).toFixed(1)} ${base.toFixed(1)} Z`
 }
 
-/** Sideways 10-yard numbers, counting up to midfield and back down, with a goal arrow. */
+/**
+ * Sideways 10-yard numbers, counting up to midfield and back down, with a goal arrow.
+ * x/y have to be the rotation center. A rotate() around the sideline with the
+ * glyph still at 0,0 swings the digits off the field.
+ */
 function yardNumbers(los: number, scale: number, ahead: number, height: number, theme: Theme): string {
   const parts: string[] = []
-  const size = 2.8 * scale
-  const left = 9 * scale
-  const right = (FIELD_WIDTH - 9) * scale
-  const attrs = `fill="${theme.number}" stroke="${theme.numberStroke}" stroke-width="${(scale * 0.18).toFixed(2)}" paint-order="stroke" font-family="Oswald, Impact, sans-serif" font-size="${size.toFixed(1)}" font-weight="500" text-anchor="middle" dominant-baseline="central"`
+  const size = 3.6 * scale
+  // 12 yards in from each sideline, clear of the split ends on the line.
+  const left = 12 * scale
+  const right = (FIELD_WIDTH - 12) * scale
+  const attrs = `fill="${theme.number}" stroke="${theme.numberStroke}" stroke-width="${(scale * 0.2).toFixed(2)}" paint-order="stroke" font-family="Oswald, Impact, sans-serif" font-size="${size.toFixed(1)}" font-weight="500" text-anchor="middle" dominant-baseline="central"`
   for (let yard = 10; yard <= 90; yard += 10) {
     const y = (ahead - fieldYAt(los, yard)) * scale
-    if (y < size || y > height - size) continue
+    if (y < size * 0.55 || y > height - size * 0.55) continue
     const label = displayedYard(yard)
     const arrow = numberArrow(yard)
-    parts.push(`<text ${attrs} transform="rotate(-90 ${left.toFixed(1)} ${y.toFixed(1)})">${label}</text>`)
-    parts.push(`<text ${attrs} transform="rotate(90 ${right.toFixed(1)} ${y.toFixed(1)})">${label}</text>`)
+    const lx = left.toFixed(1)
+    const rx = right.toFixed(1)
+    const yy = y.toFixed(1)
+    parts.push(`<text x="${lx}" y="${yy}" ${attrs} transform="rotate(-90 ${lx} ${yy})">${label}</text>`)
+    parts.push(`<text x="${rx}" y="${yy}" ${attrs} transform="rotate(90 ${rx} ${yy})">${label}</text>`)
     if (!arrow) continue
-    const shift = (arrow === 'up' ? -2.7 : 2.7) * scale
-    const inset = 2.5 * scale
-    parts.push(`<path data-arrow="${arrow}" d="${yardArrow(left + inset, y + shift, arrow, scale)}" fill="${theme.number}"/>`)
-    parts.push(`<path data-arrow="${arrow}" d="${yardArrow(right - inset, y + shift, arrow, scale)}" fill="${theme.number}"/>`)
+    const shift = (arrow === 'up' ? -1 : 1) * size * 0.78
+    const inset = size * 0.62
+    parts.push(`<path data-arrow="${arrow}" data-arrow-for="${label}" d="${yardArrow(left + inset, y + shift, arrow, scale)}" fill="${theme.number}"/>`)
+    parts.push(`<path data-arrow="${arrow}" data-arrow-for="${label}" d="${yardArrow(right - inset, y + shift, arrow, scale)}" fill="${theme.number}"/>`)
   }
   return parts.join('')
 }

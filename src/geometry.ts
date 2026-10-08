@@ -1,3 +1,4 @@
+import { END_ZONE_DEPTH, FIELD_LENGTH } from './fieldMarks'
 import type { Point, Stroke } from './types'
 
 /** American football field width in yards (160 feet). */
@@ -43,14 +44,57 @@ export function viewSize(camera: Camera): { w: number; h: number } {
   }
 }
 
-/** Match the field's yard window to the on-screen box so players keep their size. */
-export function cameraForBox(widthPx: number, heightPx: number): Camera {
+/**
+ * Match the on-screen box exactly, in yards, so the SVG viewBox has the same
+ * aspect as the frame. A capped depth letterboxes a tall phone and leaves
+ * blank green bands. The window stays on marked field (end zones included)
+ * whenever that field is taller than the screen.
+ */
+export function cameraForBox(widthPx: number, heightPx: number, los = 50): Camera {
   const scale = 10
   if (widthPx < 40 || heightPx < 40) return { ahead: 30, behind: 16, scale }
-  const depth = clamp(FIELD_WIDTH / (widthPx / heightPx), 44, 70)
-  const behind = clamp(depth * 0.34, 14, 18)
-  const ahead = depth - behind
+  const depth = (FIELD_WIDTH * heightPx) / widthPx
+  const top = los + END_ZONE_DEPTH
+  const bottom = los - FIELD_LENGTH - END_ZONE_DEPTH
+  const marked = top - bottom
+  let ahead: number
+  let behind: number
+  if (depth >= marked) {
+    const extra = depth - marked
+    ahead = top + extra / 2
+    behind = -bottom + extra / 2
+  } else {
+    behind = Math.min(18, Math.max(8, depth * 0.28))
+    ahead = depth - behind
+    if (ahead > top) {
+      ahead = top
+      behind = depth - ahead
+    }
+    if (-behind < bottom) {
+      behind = -bottom
+      ahead = depth - behind
+    }
+  }
   return { ahead, behind, scale }
+}
+
+/**
+ * Freehand tolerances in CSS pixels. Convert with `pixelsToYards` so a phone
+ * and a desktop keep the same finger gesture.
+ */
+export const DRAW_PIXELS = {
+  sample: 2.5,
+  epsilon: 6,
+  cornerWindow: 18,
+  cornerDegrees: 34,
+  minLeg: 8,
+  maxPoints: 12,
+} as const
+
+/** Yards covered by `pixels` across a field drawn `fieldPx` CSS pixels wide. */
+export function pixelsToYards(pixels: number, fieldPx: number): number {
+  if (!(fieldPx > 40)) return pixels / 8
+  return (pixels * FIELD_WIDTH) / fieldPx
 }
 
 export function segmentPoint(a: Point, b: Point, curve: Point | null, t: number): Point {
@@ -148,77 +192,170 @@ export function pointLineDistance(point: Point, a: Point, b: Point): number {
   return Math.abs(dx * (a.y - point.y) - dy * (a.x - point.x)) / length
 }
 
-function turnDegrees(a: Point, b: Point, c: Point): number {
-  const v1x = b.x - a.x
-  const v1y = b.y - a.y
-  const v2x = c.x - b.x
-  const v2y = c.y - b.y
-  const dot = v1x * v2x + v1y * v2y
-  const cross = v1x * v2y - v1y * v2x
-  return Math.abs(Math.atan2(cross, dot) * (180 / Math.PI))
+export interface SimplifyOptions {
+  /** Heading is compared across this many yards, not one sample. */
+  cornerWindow?: number
+  cornerDegrees?: number
+  /** Ignore a twitch whose shorter side is under this many yards. */
+  minLeg?: number
+  maxPoints?: number
 }
 
-function rdpIndexes(points: Point[], start: number, end: number, epsilon: number): number[] {
+function heading(a: Point, b: Point): number {
+  return Math.atan2(b.y - a.y, b.x - a.x)
+}
+
+function angleDelta(a: number, b: number): number {
+  let delta = Math.abs(b - a) % (Math.PI * 2)
+  if (delta > Math.PI) delta = Math.PI * 2 - delta
+  return (delta * 180) / Math.PI
+}
+
+function walkIndex(points: Point[], index: number, distance: number, dir: -1 | 1): number {
+  let walked = 0
+  let cursor = index
+  while (cursor + dir >= 0 && cursor + dir < points.length && walked < distance) {
+    const next = cursor + dir
+    walked += dist(points[cursor], points[next])
+    cursor = next
+  }
+  return cursor
+}
+
+function dedupePoints(points: Point[], min: number): Point[] {
+  if (points.length === 0) return []
+  const out: Point[] = [{ ...points[0] }]
+  for (let i = 1; i < points.length; i++) {
+    if (dist(out[out.length - 1], points[i]) >= min) out.push({ ...points[i] })
+    else if (i === points.length - 1) out[out.length - 1] = { ...points[i] }
+  }
+  return out
+}
+
+/** Turn across `window` yards. A rounded cut still counts; one jitter sample does not. */
+function windowTurn(points: Point[], index: number, window: number, minLeg: number): number {
+  const prev = walkIndex(points, index, window, -1)
+  const next = walkIndex(points, index, window, 1)
+  if (prev === index || next === index) return 0
+  if (dist(points[prev], points[index]) < minLeg || dist(points[index], points[next]) < minLeg) return 0
+  return angleDelta(heading(points[prev], points[index]), heading(points[index], points[next]))
+}
+
+function pickCorners(points: Point[], window: number, degrees: number, minLeg: number, maxCorners: number): number[] {
+  const score = points.map((_, index) => windowTurn(points, index, window, minLeg))
+  const peaks: { index: number; turn: number }[] = []
+  for (let i = 1; i < points.length - 1; i++) {
+    if (score[i] < degrees) continue
+    const from = walkIndex(points, i, window * 0.55, -1)
+    const to = walkIndex(points, i, window * 0.55, 1)
+    let best = i
+    for (let j = from; j <= to; j++) if (score[j] > score[best]) best = j
+    if (best === i) peaks.push({ index: i, turn: score[i] })
+  }
+  const ranked = [...peaks].sort((a, b) => b.turn - a.turn).slice(0, maxCorners)
+  ranked.sort((a, b) => a.index - b.index)
+  return ranked.map((peak) => peak.index)
+}
+
+function quadraticControl(start: Point, through: Point, end: Point, t: number): Point {
+  const o = 1 - t
+  const denom = 2 * o * t
+  if (denom < 1e-4) return { ...through }
+  return {
+    x: (through.x - o * o * start.x - t * t * end.x) / denom,
+    y: (through.y - o * o * start.y - t * t * end.y) / denom,
+  }
+}
+
+function maxCurveError(points: Point[], a: number, b: number, control: Point): number {
   let max = 0
-  let index = -1
-  for (let i = start + 1; i < end; i++) {
-    const distance = pointLineDistance(points[i], points[start], points[end])
-    if (distance > max) {
-      max = distance
-      index = i
+  const span = Math.max(1, b - a)
+  for (let i = a; i <= b; i++) {
+    const hint = (i - a) / span
+    const from = Math.max(0, hint - 0.3)
+    const to = Math.min(1, hint + 0.3)
+    let best = Infinity
+    for (let step = 0; step <= 10; step++) {
+      const t = from + ((to - from) * step) / 10
+      best = Math.min(best, dist(points[i], segmentPoint(points[a], points[b], control, t)))
     }
-  }
-  if (max > epsilon && index !== -1) {
-    const left = rdpIndexes(points, start, index, epsilon)
-    const right = rdpIndexes(points, index, end, epsilon)
-    return [...left, ...right.slice(1)]
-  }
-  return [start, end]
-}
-
-function maxTurnInSpan(points: Point[], start: number, end: number): number {
-  let max = 0
-  for (let i = start + 1; i < end; i++) {
-    if (i + 1 > end) break
-    max = Math.max(max, turnDegrees(points[i - 1], points[i], points[Math.min(end, i + 1)]))
+    if (best > max) max = best
   }
   return max
 }
 
+function fitSpan(points: Point[], a: number, b: number, epsilon: number): { points: Point[]; curves: (Point | null)[] } {
+  const start = points[a]
+  const end = points[b]
+  const straight = (): { points: Point[]; curves: (Point | null)[] } => ({
+    points: [{ ...start }, { ...end }],
+    curves: [null],
+  })
+  if (b <= a + 1) return straight()
+  let max = 0
+  let far = a
+  for (let i = a + 1; i < b; i++) {
+    const deviation = pointLineDistance(points[i], start, end)
+    if (deviation > max) {
+      max = deviation
+      far = i
+    }
+  }
+  if (max <= epsilon || far <= a || far >= b) return straight()
+  const t = clamp((far - a) / (b - a), 0.18, 0.82)
+  const control = quadraticControl(start, points[far], end, t)
+  if (maxCurveError(points, a, b, control) <= epsilon * 1.7) {
+    return { points: [{ ...start }, { ...end }], curves: [control] }
+  }
+  const left = fitSpan(points, a, far, epsilon)
+  const right = fitSpan(points, far, b, epsilon)
+  return {
+    points: [...left.points, ...right.points.slice(1)],
+    curves: [...left.curves, ...right.curves],
+  }
+}
+
+function fitAnchors(points: Point[], anchors: number[], epsilon: number): { points: Point[]; curves: (Point | null)[] } {
+  const fitted: Point[] = []
+  const curves: (Point | null)[] = []
+  for (let k = 0; k < anchors.length - 1; k++) {
+    const span = fitSpan(points, anchors[k], anchors[k + 1], epsilon)
+    if (k === 0) fitted.push(...span.points)
+    else fitted.push(...span.points.slice(1))
+    curves.push(...span.curves)
+  }
+  return { points: fitted, curves }
+}
+
 /**
- * Collapse a freehand stroke. A sharp kink in the original samples stays a
- * corner. A smooth bow becomes one quadratic, which is how a wheel gets its curve.
+ * Collapse a freehand stroke. Cuts are detected from the heading change over
+ * a short distance, so a rounded finger break stays a corner. A gentle arc
+ * becomes one or two quadratics. `epsilon` is the jitter tolerance in yards.
  */
-export function simplifyPath(raw: Point[], epsilon: number): { points: Point[]; curves: (Point | null)[] } {
+export function simplifyPath(
+  raw: Point[],
+  epsilon: number,
+  options?: SimplifyOptions,
+): { points: Point[]; curves: (Point | null)[] } {
   if (raw.length === 0) return { points: [], curves: [] }
   if (raw.length === 1) return { points: [{ ...raw[0] }], curves: [] }
-  const indexes = rdpIndexes(raw, 0, raw.length - 1, epsilon)
-  if (indexes.length <= 2) {
-    return {
-      points: indexes.map((index) => ({ ...raw[index] })),
-      curves: indexes.length === 2 ? [null] : [],
-    }
-  }
+  const points = dedupePoints(raw, Math.min(0.06, epsilon * 0.2))
+  if (points.length < 2) return { points, curves: [] }
+  if (points.length === 2) return { points, curves: [null] }
 
-  const kept: number[] = [indexes[0]]
-  const curves: (Point | null)[] = []
-  let control: Point | null = null
-  for (let k = 1; k < indexes.length - 1; k++) {
-    const next = indexes[k + 1]
-    const smooth = maxTurnInSpan(raw, kept[kept.length - 1], next) < 36
-    if (smooth) {
-      control = { ...raw[indexes[k]] }
-      continue
-    }
-    curves.push(control)
-    control = null
-    kept.push(indexes[k])
+  const window = options?.cornerWindow ?? Math.max(1.5, epsilon * 3)
+  const degrees = options?.cornerDegrees ?? 36
+  const minLeg = options?.minLeg ?? Math.max(0.35, epsilon)
+  const maxPoints = options?.maxPoints ?? 12
+  const corners = pickCorners(points, window, degrees, minLeg, Math.max(1, maxPoints - 2))
+  const anchors = [0, ...corners, points.length - 1]
+  let epsilonNow = epsilon
+  let fitted = fitAnchors(points, anchors, epsilonNow)
+  while (fitted.points.length > maxPoints && epsilonNow < epsilon * 6) {
+    epsilonNow *= 1.4
+    fitted = fitAnchors(points, anchors, epsilonNow)
   }
-  curves.push(control)
-  kept.push(indexes[indexes.length - 1])
-  const points = kept.map((index) => ({ ...raw[index] }))
-  while (curves.length < points.length - 1) curves.push(null)
-  return { points, curves: curves.slice(0, points.length - 1) }
+  return fitted
 }
 
 export function moveStrokePoint(stroke: Stroke, index: number, point: Point): Stroke {

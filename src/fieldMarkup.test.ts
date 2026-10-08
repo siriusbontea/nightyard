@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { fieldMarkup, labelFontSize, labelInk } from './fieldMarkup'
 import { OUR_COLOR, THEIR_COLOR, defenseFor } from './formations'
-import { EXPORT_CAMERA, PLAYER_R } from './geometry'
+import { EXPORT_CAMERA, FIELD_WIDTH, PLAYER_R, cameraForBox, viewSize } from './geometry'
 import { createPlay, setOurSide, setShowDefense, showcasePlay } from './play'
 import { NIGHT, PRINT } from './theme'
 
@@ -73,6 +73,67 @@ describe('player markers', () => {
     const radius = 16
     expect(labelFontSize('X', radius, 'circle')).toBeGreaterThan(labelFontSize('SLT', radius, 'circle'))
     expect(labelFontSize('QB', radius, 'diamond')).toBeLessThan(radius * 1.2)
+  })
+
+  it('draws readable yard numbers on both sidelines, including the 50', () => {
+    const width = 360
+    const height = 640
+    const camera = cameraForBox(width, height, 50)
+    const { w, h } = viewSize(camera)
+    expect(w / h).toBeCloseTo(width / height, 4)
+    const svg = fieldMarkup({ play: showcasePlay(), camera, theme: NIGHT })
+    const tags = [...svg.matchAll(/<text\b([^>]*)>(\d+)<\/text>/g)]
+      .map((match) => ({ attrs: match[1], label: Number(match[2]) }))
+      .filter((tag) => /rotate\(/.test(tag.attrs))
+    expect(tags.length).toBeGreaterThanOrEqual(8)
+    const fifties = tags.filter((tag) => tag.label === 50)
+    expect(fifties).toHaveLength(2)
+    const left = tags.filter((tag) => /rotate\(-90 /.test(tag.attrs))
+    const right = tags.filter((tag) => /rotate\(90 /.test(tag.attrs))
+    expect(left.length).toBe(right.length)
+    expect(left.length).toBeGreaterThanOrEqual(4)
+    for (const tag of tags) {
+      const x = Number(/\bx="([\d.]+)"/.exec(tag.attrs)?.[1])
+      const y = Number(/\by="([\d.]+)"/.exec(tag.attrs)?.[1])
+      const rot = /rotate\((-?[\d.]+) ([\d.]+) ([\d.]+)\)/.exec(tag.attrs)
+      expect(rot, tag.attrs).not.toBeNull()
+      expect(x).toBeCloseTo(Number(rot?.[2]), 5)
+      expect(y).toBeCloseTo(Number(rot?.[3]), 5)
+      expect(x).toBeGreaterThan(4 * camera.scale)
+      expect(x).toBeLessThan(FIELD_WIDTH * camera.scale - 4 * camera.scale)
+      expect(y).toBeGreaterThan(0)
+      expect(y).toBeLessThan(h)
+      expect(tag.attrs).toContain(`font-size="${(3.6 * camera.scale).toFixed(1)}"`)
+    }
+    expect(Math.min(...left.map((tag) => Number(/\bx="([\d.]+)"/.exec(tag.attrs)?.[1])))).toBeLessThan(w / 2)
+    expect(Math.max(...right.map((tag) => Number(/\bx="([\d.]+)"/.exec(tag.attrs)?.[1])))).toBeGreaterThan(w / 2)
+    const up = svg.match(/data-arrow="up"/g) ?? []
+    const down = svg.match(/data-arrow="down"/g) ?? []
+    expect(up.length).toBeGreaterThanOrEqual(2)
+    expect(down.length).toBeGreaterThanOrEqual(2)
+    expect(svg).not.toContain('data-arrow-for="50"')
+
+    const lines = [...svg.matchAll(/<line x1="0" y1="([\d.]+)" x2="([\d.]+)" y2="([\d.]+)"/g)]
+      .filter((match) => Math.abs(Number(match[2]) - w) < 1)
+      .map((match) => Number(match[1]))
+      .sort((a, b) => a - b)
+    expect(lines.length).toBeGreaterThan(4)
+    for (let i = 1; i < lines.length; i++) {
+      expect(lines[i] - lines[i - 1]).toBeLessThanOrEqual(5 * camera.scale + 0.2)
+    }
+    const endZones = [...svg.matchAll(new RegExp(`<rect x="0" y="([\\d.]+)" width="[^"]+" height="([\\d.]+)" fill="${NIGHT.endZone}"`, 'g'))]
+    const edgeCovered = (edge: number, line: number) => {
+      if (Math.abs(line - edge) <= 5 * camera.scale + 2) return true
+      return endZones.some((match) => {
+        const y = Number(match[1])
+        const heightPx = Number(match[2])
+        const from = Math.min(edge, line)
+        const to = Math.max(edge, line)
+        return y <= from + 1 && y + heightPx >= to - 1
+      })
+    }
+    expect(edgeCovered(0, lines[0])).toBe(true)
+    expect(edgeCovered(h, lines[lines.length - 1])).toBe(true)
   })
 
   it('numbers a midfield snap up to the 50 and back down, and hides both end zones', () => {

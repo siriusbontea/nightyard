@@ -30,7 +30,7 @@ export function App() {
   const [includeNotes, setIncludeNotes] = useState(true)
   const [includeAssignments, setIncludeAssignments] = useState(true)
   const [busy, setBusy] = useState(false)
-  const [camera, setCamera] = useState(() => cameraForBox(360, 520))
+  const [camera, setCamera] = useState(() => cameraForBox(360, 520, 50))
   const frameRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const play = book.play
@@ -40,13 +40,13 @@ export function App() {
     if (!el) return
     const measure = () => {
       const rect = el.getBoundingClientRect()
-      setCamera(cameraForBox(rect.width, rect.height))
+      setCamera(cameraForBox(rect.width, rect.height, play?.los ?? 50))
     }
     measure()
     const observer = new ResizeObserver(measure)
     observer.observe(el)
     return () => observer.disconnect()
-  }, [play?.id, book.ready])
+  }, [play?.id, play?.los, book.ready])
 
   useEffect(() => {
     if (!playing) return
