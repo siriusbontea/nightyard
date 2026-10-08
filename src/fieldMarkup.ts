@@ -107,6 +107,35 @@ function handlesMarkup(stroke: Stroke, camera: Camera): string {
   return parts.join('')
 }
 
+/** Dark ink on light markers, light ink on dark ones. Print sheets are white fills. */
+export function labelInk(fill: string): string {
+  return relativeLuminance(fill) >= 0.28 ? '#102033' : '#f8fafc'
+}
+
+function relativeLuminance(hex: string): number {
+  const raw = hex.replace('#', '')
+  const full = raw.length === 3 ? raw.split('').map((char) => char + char).join('') : raw.slice(0, 6)
+  if (!/^[0-9a-fA-F]{6}$/.test(full)) return 1
+  const channel = (pair: string) => {
+    const value = parseInt(pair, 16) / 255
+    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
+  }
+  const r = channel(full.slice(0, 2))
+  const g = channel(full.slice(2, 4))
+  const b = channel(full.slice(4, 6))
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b
+}
+
+/** Font size in SVG units so 1–4 character labels stay inside the marker. */
+export function labelFontSize(label: string, radius: number, shape: Player['shape']): number {
+  const chars = Math.min(4, Math.max(1, [...label].length))
+  const widthRatio = shape === 'diamond' ? 0.7 : shape === 'square' ? 0.78 : 0.68
+  const em = chars === 1 ? 0.7 : 0.58
+  const fromWidth = (radius * 2 * widthRatio) / (chars * em)
+  const fromHeight = radius * (shape === 'diamond' ? 0.98 : chars === 1 ? 1.18 : 0.98)
+  return Math.min(fromWidth, fromHeight)
+}
+
 function playerMarkup(player: Player, camera: Camera, theme: Theme, selected: boolean): string {
   const pos = fieldToSvg(player, camera)
   const radius = PLAYER_R * camera.scale
@@ -124,12 +153,12 @@ function playerMarkup(player: Player, camera: Camera, theme: Theme, selected: bo
     shape = `<polygon points="0,${-dy.toFixed(2)} ${dx.toFixed(2)},0 0,${(dy * 0.92).toFixed(2)} ${(-dx).toFixed(2)},0" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>`
   }
   const ring = selected && theme.interactive ? `<circle r="${(radius + 5).toFixed(1)}" fill="none" stroke="#2ee6c8" stroke-width="2.5"/>` : ''
-  const labelSize = Math.max(13, 1.55 * camera.scale)
-  const label = `<text y="${(radius + labelSize * 0.92).toFixed(1)}" fill="${theme.label}" stroke="${theme.outlineOnly ? 'none' : '#07140e'}" stroke-width="${theme.outlineOnly ? 0 : 3}" paint-order="stroke" font-family="Oswald, Impact, sans-serif" font-size="${labelSize.toFixed(1)}" font-weight="500" text-anchor="middle">${escapeXml(player.label)}</text>`
+  const size = labelFontSize(player.label, radius, player.shape)
+  const label = `<text x="0" y="0" fill="${labelInk(fill)}" font-family="Oswald, Impact, sans-serif" font-size="${size.toFixed(1)}" font-weight="600" text-anchor="middle" dominant-baseline="central">${escapeXml(player.label)}</text>`
   let badge = ''
   if (player.read && player.side === 'offense') {
-    const bx = radius * 0.78
-    const by = -radius * 0.78
+    const bx = radius * 0.82
+    const by = -radius * 0.82
     badge = `<g transform="translate(${bx.toFixed(1)} ${by.toFixed(1)})"><circle r="9.5" fill="${theme.badgeFill}" stroke="${theme.badgeStroke}" stroke-width="1.6"/><text fill="${theme.badgeText}" font-family="Oswald, Impact, sans-serif" font-size="12" font-weight="600" text-anchor="middle" dominant-baseline="central">${player.read}</text></g>`
   }
   return `<g data-player-id="${escapeXml(player.id)}" transform="translate(${pos.x.toFixed(2)} ${pos.y.toFixed(2)})">${ring}${shape}${label}${badge}</g>`
