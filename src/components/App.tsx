@@ -5,8 +5,8 @@ import { renderPng } from '../pngExport'
 import { downloadBlob, downloadText } from '../download'
 import { ballLabel } from '../play'
 import { usePlaybook } from '../usePlaybook'
-import type { StrokeKind } from '../types'
-import { formatLabel } from '../types'
+import type { FormatId, StrokeKind } from '../types'
+import { formatShort } from '../types'
 import { Field } from './Field'
 import { PlaybookList } from './PlaybookList'
 import { ExportSheet, MoreSheet, PlayerSheet, PlaySettings, PresetSheet, Sheet } from './Sheets'
@@ -14,6 +14,8 @@ import { ExportSheet, MoreSheet, PlayerSheet, PlaySettings, PresetSheet, Sheet }
 type Tool = 'move' | 'draw'
 type SheetId = null | 'book' | 'presets' | 'player' | 'more' | 'export' | 'play'
 const SPEEDS = [0.5, 1, 1.5] as const
+const SPEED_WORD: Record<(typeof SPEEDS)[number], string> = { 0.5: 'Slow', 1: 'Normal', 1.5: 'Fast' }
+const DRAW_WORD: Record<StrokeKind, string> = { route: 'Line', motion: 'Walk', block: 'Block', run: 'Run' }
 
 export function App() {
   const book = usePlaybook()
@@ -100,13 +102,22 @@ export function App() {
     setT(0)
   }
 
+  function startNew(format: FormatId) {
+    void book.create(format).then(() => {
+      setSelectedPlayerId(null)
+      setSelectedStrokeId(null)
+      stopPlayback()
+      setSheet('play')
+    })
+  }
+
   async function exportPng(style: 'print' | 'color') {
     if (!play) return
     setBusy(true)
     try {
       const blob = await renderPng(play, style, { includeNotes, includeAssignments })
       downloadBlob(`${slug(play.name)}-${style}.png`, blob)
-      book.notify(style === 'print' ? 'Print sheet downloaded' : 'Color sheet downloaded')
+      book.notify(style === 'print' ? 'White picture saved' : 'Color picture saved')
     } catch (error) {
       book.notify(error instanceof Error ? error.message : 'Could not export the image.')
     } finally {
@@ -120,7 +131,7 @@ export function App() {
     return (
       <div class="boot">
         <p class="brand">Night Yard</p>
-        <p>Opening your playbook…</p>
+        <p>Opening your plays…</p>
       </div>
     )
   }
@@ -129,13 +140,13 @@ export function App() {
     return (
       <div class="boot">
         <p class="brand">Night Yard</p>
-        <h1>No plays in this book</h1>
-        <p class="empty-copy">Draw a 5v5 slant or a full 11v11 install. It stays on this phone.</p>
-        <button type="button" class="primary" onClick={() => book.create('5v5')}>
+        <h1>No plays yet</h1>
+        <p class="empty-copy">Tap the button. Then pick how many players.</p>
+        <button type="button" class="primary" onClick={() => startNew('5v5')}>
           New play
         </button>
         <button type="button" class="primary ghost" onClick={() => fileRef.current?.click()}>
-          Import JSON
+          Open a file
         </button>
         <input
           ref={fileRef}
@@ -149,7 +160,7 @@ export function App() {
             ;(event.currentTarget as HTMLInputElement).value = ''
           }}
         />
-        {book.toast ? <div class="toast" role="status">{book.toast}</div> : null}
+        {book.toast ? <Toast message={book.toast} undo={book.toastUndo} /> : null}
       </div>
     )
   }
@@ -160,7 +171,7 @@ export function App() {
         <div class="desk-head">
           <p class="brand">Night Yard</p>
           <label class="field-label">
-            Playbook
+            Plays
             <input
               value={book.bookName}
               maxLength={60}
@@ -180,7 +191,7 @@ export function App() {
           onRename={book.rename}
           onDuplicate={book.duplicate}
           onDelete={book.remove}
-          onCreate={() => book.create(play.format)}
+          onCreate={() => startNew(play.format)}
         />
       </aside>
       <div class="stage">
@@ -190,15 +201,21 @@ export function App() {
               <span class="brand">Night Yard</span>
               <span class="play-title">{play.name}</span>
             </button>
-            <button type="button" class="icon-btn" aria-label="Undo" disabled={!book.canUndo} onClick={book.undo}>
-              <UndoIcon />
+            <button type="button" class="text-btn setup-btn" onClick={() => setSheet('play')}>
+              Setup
             </button>
-            <button type="button" class="icon-btn" aria-label="Redo" disabled={!book.canRedo} onClick={book.redo}>
+            <button type="button" class="icon-btn labeled" aria-label="Undo" disabled={!book.canUndo} onClick={book.undo}>
+              <UndoIcon />
+              <span>Undo</span>
+            </button>
+            <button type="button" class="icon-btn labeled" aria-label="Redo" disabled={!book.canRedo} onClick={book.redo}>
               <RedoIcon />
+              <span>Redo</span>
             </button>
           </div>
           <p class="sub">
-            {play.formation} · {formatLabel(play.format)} · Ball on {ballLabel(play.los)}
+            {play.formation} · {formatShort(play.format)} · Start on {ballLabel(play.los)}
+            {book.saved ? ' · Saved' : ''}
           </p>
         </header>
         <div class="field-wrap">
@@ -249,19 +266,22 @@ export function App() {
           <button
             type="button"
             class="speed"
-            aria-label={`Playback speed ${speed} times`}
+            aria-label={`Speed ${SPEED_WORD[speed]}`}
             onClick={() => setSpeed(SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length])}
           >
-            {speed}×
+            {SPEED_WORD[speed]}
           </button>
         </div>
         {tool === 'draw' ? (
-          <div class="kind-row">
-            {(['route', 'motion', 'block', 'run'] as StrokeKind[]).map((kind) => (
-              <button key={kind} type="button" class="chip" aria-pressed={strokeKind === kind} onClick={() => setStrokeKind(kind)}>
-                {kind === 'route' ? 'Route' : kind === 'motion' ? 'Motion' : kind === 'block' ? 'Block' : 'Run'}
-              </button>
-            ))}
+          <div class="coach">
+            <p class="hint">Drag from a player.</p>
+            <div class="kind-row">
+              {(['route', 'motion', 'block', 'run'] as StrokeKind[]).map((kind) => (
+                <button key={kind} type="button" class="chip" aria-pressed={strokeKind === kind} onClick={() => setStrokeKind(kind)}>
+                  {DRAW_WORD[kind]}
+                </button>
+              ))}
+            </div>
           </div>
         ) : selected ? (
           <div class="edit-row">
@@ -269,6 +289,7 @@ export function App() {
               <i style={{ background: selected.color }} />
               {selected.label}
             </span>
+            <span class="hint grow">Drag {selected.label} to move.</span>
             <button type="button" class="text-btn" onClick={() => setSheet('player')}>
               Edit
             </button>
@@ -281,16 +302,16 @@ export function App() {
                 stopPlayback()
               }}
             >
-              Clear
+              Erase
             </button>
           </div>
         ) : (
-          <p class="hint">{play.strokes.length === 0 ? 'Drag from a player to draw. Routes live in the bottom bar.' : 'Move drags a player. Draw pulls a route off them.'}</p>
+          <p class="hint">{play.strokes.length === 0 ? 'Tap Draw, then drag from a player.' : 'Tap Play to watch.'}</p>
         )}
         <nav class="toolbar" aria-label="Tools">
           <button type="button" class="tool" onClick={() => setSheet('book')}>
             <BookIcon />
-            Book
+            Plays
           </button>
           <button type="button" class="tool" aria-pressed={tool === 'move'} onClick={() => setTool('move')}>
             <MoveIcon />
@@ -302,7 +323,7 @@ export function App() {
           </button>
           <button type="button" class="tool" onClick={() => setSheet('presets')}>
             <RouteIcon />
-            Routes
+            Paths
           </button>
           <button type="button" class="tool" onClick={() => setSheet('more')}>
             <MoreIcon />
@@ -328,10 +349,7 @@ export function App() {
               setSheet(null)
             }}
             onDelete={book.remove}
-            onCreate={() => {
-              book.create(play.format)
-              setSheet(null)
-            }}
+            onCreate={() => startNew(play.format)}
           />
         </Sheet>
       ) : null}
@@ -408,11 +426,11 @@ export function App() {
           onPng={exportPng}
           onJsonPlay={() => {
             downloadText(`${slug(play.name)}.json`, serializePlay(play))
-            book.notify('Play JSON downloaded')
+            book.notify('Play file saved')
           }}
           onJsonBook={() => {
             downloadText(`${slug(book.bookName)}.json`, serializePlaybook(book.bookName, book.plays))
-            book.notify('Playbook JSON downloaded')
+            book.notify('All plays saved')
           }}
           onImport={() => fileRef.current?.click()}
           onClose={() => setSheet(null)}
@@ -433,10 +451,19 @@ export function App() {
           ;(event.currentTarget as HTMLInputElement).value = ''
         }}
       />
-      {book.toast ? (
-        <div class="toast" role="status">
-          {book.toast}
-        </div>
+      {book.toast ? <Toast message={book.toast} undo={book.toastUndo} /> : null}
+    </div>
+  )
+}
+
+function Toast(props: { message: string; undo: (() => void) | null }) {
+  return (
+    <div class="toast" role="status">
+      <span>{props.message}</span>
+      {props.undo ? (
+        <button type="button" class="toast-undo" onClick={props.undo}>
+          Undo
+        </button>
       ) : null}
     </div>
   )

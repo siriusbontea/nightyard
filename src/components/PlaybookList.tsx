@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks'
 import type { Play } from '../types'
-import { formatLabel } from '../types'
+import { formatShort } from '../types'
 
 function age(timestamp: number): string {
   const seconds = Math.round((Date.now() - timestamp) / 1000)
@@ -24,7 +24,6 @@ export function PlaybookList(props: {
 }) {
   const [renaming, setRenaming] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
-  const [confirmId, setConfirmId] = useState<string | null>(null)
 
   return (
     <div class="book-list">
@@ -32,7 +31,7 @@ export function PlaybookList(props: {
         New play
       </button>
       {props.plays.length === 0 ? (
-        <p class="empty-copy">No plays yet. Draw the first one under the lights.</p>
+        <p class="empty-copy">No plays yet. Tap New play.</p>
       ) : (
         <ul>
           {props.plays.map((play) => {
@@ -62,7 +61,7 @@ export function PlaybookList(props: {
                   <button type="button" class="play-open" onClick={() => props.onOpen(play.id)}>
                     <span class="play-name">{play.name}</span>
                     <span class="play-meta">
-                      {play.formation} · {formatLabel(play.format)} · {age(play.updatedAt)}
+                      {play.formation} · {formatShort(play.format)} · {age(play.updatedAt)}
                     </span>
                   </button>
                 )}
@@ -73,7 +72,6 @@ export function PlaybookList(props: {
                     onClick={() => {
                       setRenaming(play.id)
                       setDraft(play.name)
-                      setConfirmId(null)
                     }}
                   >
                     Rename
@@ -81,15 +79,9 @@ export function PlaybookList(props: {
                   <button type="button" class="text-btn" onClick={() => props.onDuplicate(play.id)}>
                     Copy
                   </button>
-                  {confirmId === play.id ? (
-                    <button type="button" class="text-btn danger" onClick={() => props.onDelete(play.id)}>
-                      Confirm
-                    </button>
-                  ) : (
-                    <button type="button" class="text-btn danger" onClick={() => setConfirmId(play.id)}>
-                      Delete
-                    </button>
-                  )}
+                  <button type="button" class="text-btn danger" onClick={() => props.onDelete(play.id)}>
+                    Delete
+                  </button>
                 </div>
               </li>
             )

@@ -248,7 +248,7 @@ export function fieldMarkup(options: {
   const tagFill = theme.outlineOnly ? '#ffffff' : '#062018'
   const tagInk = theme.outlineOnly ? '#111111' : theme.los
   parts.push(
-    `<g transform="translate(${tagX.toFixed(1)} ${(losY - 14).toFixed(1)})"><rect width="42" height="18" rx="9" fill="${tagFill}" stroke="${tagInk}" stroke-width="1.4"/><text x="21" y="10" fill="${tagInk}" font-family="Oswald, Impact, sans-serif" font-size="11" text-anchor="middle" dominant-baseline="central">LOS</text></g>`,
+    `<g transform="translate(${tagX.toFixed(1)} ${(losY - 14).toFixed(1)})"><rect width="42" height="18" rx="9" fill="${tagFill}" stroke="${tagInk}" stroke-width="1.4"/><text x="21" y="10" fill="${tagInk}" font-family="Oswald, Impact, sans-serif" font-size="11" text-anchor="middle" dominant-baseline="central">LINE</text></g>`,
   )
   const ball = fieldToSvg({ x: FIELD_WIDTH / 2, y: -0.85 }, camera)
   parts.push(

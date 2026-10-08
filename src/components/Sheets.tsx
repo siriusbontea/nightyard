@@ -2,9 +2,9 @@ import { useEffect, useState } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
 import { formationsFor } from '../formations'
 import { applyFormation, setShowDefense } from '../play'
-import { ROUTE_PRESETS, kindLabel, presetLabel } from '../presets'
+import { ROUTE_PRESETS, plainPreset, presetLabel } from '../presets'
 import type { Play, Player } from '../types'
-import { FORMATS, formatLabel, type FormatId } from '../types'
+import { FORMATS, formatShort, formatStyle, type FormatId } from '../types'
 
 export function Sheet(props: { title: string; onClose: () => void; children: ComponentChildren }) {
   useEffect(() => {
@@ -60,39 +60,40 @@ export function PlaySettings(props: { play: Play; onChange: (play: Play) => void
 
   return (
     <Sheet
-      title="Play"
+      title="Setup"
       onClose={() => {
         props.onChange(edited())
         props.onClose()
       }}
     >
       <label class="field-label">
-        Play name
+        Name
         <input value={name} maxLength={80} onInput={(event) => setName((event.currentTarget as HTMLInputElement).value)} />
       </label>
       <label class="field-label">
-        Formation name
+        Lineup name
         <input
           value={formation}
           maxLength={40}
           onInput={(event) => setFormation((event.currentTarget as HTMLInputElement).value)}
         />
       </label>
-      <p class="field-label">Format</p>
+      <p class="field-label">How many</p>
       <div class="chips">
         {FORMATS.map((format) => (
           <button
             key={format.id}
             type="button"
-            class="chip"
+            class="chip stack-chip"
             aria-pressed={play.format === format.id}
             onClick={() => props.onChange(applyFormation(edited(), format.id, play.formationId))}
           >
-            {format.label}
+            <span>{formatShort(format.id)}</span>
+            <small>{formatStyle(format.id)}</small>
           </button>
         ))}
       </div>
-      <p class="field-label">Personnel</p>
+      <p class="field-label">Lineup</p>
       <div class="chips">
         {formationsFor(play.format).map((template) => (
           <button
@@ -106,7 +107,7 @@ export function PlaySettings(props: { play: Play; onChange: (play: Play) => void
           </button>
         ))}
       </div>
-      <p class="field-label">Ball on</p>
+      <p class="field-label">Start line</p>
       <div class="chips">
         {[5, 10, 15, 20, 25, 30, 40, 50].map((los) => (
           <button
@@ -121,7 +122,7 @@ export function PlaySettings(props: { play: Play; onChange: (play: Play) => void
         ))}
       </div>
       <label class="field-label">
-        Notes
+        Note
         <textarea
           rows={4}
           maxLength={600}
@@ -129,7 +130,7 @@ export function PlaySettings(props: { play: Play; onChange: (play: Play) => void
           onInput={(event) => setNotes((event.currentTarget as HTMLTextAreaElement).value)}
         />
       </label>
-      <p class="fine">Switching format or personnel clears routes. Undo puts them back.</p>
+      <p class="fine">Changing the lineup erases the lines. Undo brings them back.</p>
     </Sheet>
   )
 }
@@ -144,8 +145,8 @@ export function PresetSheet(props: {
   const visible = props.play.players.filter((player) => player.side === 'offense' || props.play.showDefense)
   const selected = visible.find((player) => player.id === props.selectedId) ?? null
   return (
-    <Sheet title="Routes" onClose={props.onClose}>
-      <p class="field-label">Player</p>
+    <Sheet title="Paths" onClose={props.onClose}>
+      <p class="field-label">Who</p>
       <div class="chips">
         {visible.map((player) => (
           <button
@@ -162,18 +163,18 @@ export function PresetSheet(props: {
       </div>
       {selected ? (
         <>
-          <p class="field-label">Assign to {selected.label}</p>
+          <p class="field-label">For {selected.label}</p>
           <div class="preset-grid">
             {ROUTE_PRESETS.map((preset) => (
               <button key={preset.id} type="button" class="preset" onClick={() => props.onApply(selected.id, preset.id)}>
                 <span>{preset.label}</span>
-                <small>{kindLabel(preset.kind)}</small>
+                <small>{plainPreset(preset.id)}</small>
               </button>
             ))}
           </div>
         </>
       ) : (
-        <p class="empty-copy">Choose who is running it, then tap a route.</p>
+        <p class="empty-copy">Tap a player first.</p>
       )}
     </Sheet>
   )
@@ -210,17 +211,18 @@ export function PlayerSheet(props: {
       }}
     >
       <label class="field-label">
-        Label
+        Name
         <input
           value={label}
           maxLength={4}
           onInput={(event) => setLabel((event.currentTarget as HTMLInputElement).value)}
         />
       </label>
-      <p class="field-label">QB read</p>
+      <p class="field-label">Order</p>
+      <p class="fine">1 goes first.</p>
       <div class="chips">
         <button type="button" class="chip" aria-pressed={player.read === null} onClick={() => props.onChange(current({ read: null }))}>
-          None
+          Off
         </button>
         {[1, 2, 3, 4, 5].map((read) => (
           <button
@@ -235,7 +237,7 @@ export function PlayerSheet(props: {
         ))}
       </div>
       <label class="field-label">
-        Assignment note
+        Note
         <textarea
           rows={3}
           maxLength={180}
@@ -243,12 +245,12 @@ export function PlayerSheet(props: {
           onInput={(event) => setNote((event.currentTarget as HTMLTextAreaElement).value)}
         />
       </label>
-      <p class="field-label">Paths</p>
-      {strokes.length === 0 ? <p class="empty-copy">No route yet. Drag from this player, or pick one from Routes.</p> : null}
+      <p class="field-label">Lines</p>
+      {strokes.length === 0 ? <p class="empty-copy">No line yet. Tap Draw, then drag from this player. Or tap Paths.</p> : null}
       <div class="stack">
         {strokes.map((stroke) => (
           <button key={stroke.id} type="button" class="row-btn" onClick={() => props.onDeleteStroke(stroke.id)}>
-            Remove {stroke.preset ? presetLabel(stroke.preset) : kindLabel(stroke.kind)}
+            Erase {stroke.preset ? presetLabel(stroke.preset) : stroke.kind === 'motion' ? 'Walk' : stroke.kind === 'block' ? 'Block' : stroke.kind === 'run' ? 'Run' : 'Line'}
           </button>
         ))}
       </div>
@@ -264,30 +266,22 @@ export function MoreSheet(props: {
   onExport: () => void
   onClose: () => void
 }) {
-  const [confirm, setConfirm] = useState(false)
   return (
     <Sheet title="More" onClose={props.onClose}>
       <button type="button" class="row-btn" onClick={() => props.onChange(setShowDefense(props.play, !props.play.showDefense))}>
-        {props.play.showDefense ? 'Hide defense' : 'Show defense'}
-        <small>{formatLabel(props.play.format)} shell</small>
+        {props.play.showDefense ? 'Hide the other team' : 'Show the other team'}
+        <small>{formatShort(props.play.format)}</small>
       </button>
       <button type="button" class="row-btn" onClick={props.onExport}>
-        Export and import
-        <small>PNG sheets or a JSON file</small>
+        Save pictures and files
       </button>
       <button type="button" class="row-btn" onClick={props.onDuplicate}>
-        Duplicate this play
+        Copy this play
       </button>
-      {confirm ? (
-        <button type="button" class="row-btn danger" onClick={props.onDelete}>
-          Delete {props.play.name} for good
-        </button>
-      ) : (
-        <button type="button" class="row-btn danger" onClick={() => setConfirm(true)}>
-          Delete this play
-        </button>
-      )}
-      <p class="fine">Night Yard is a play designer for Sirius Bontea. Flag from 5v5 to 9v9, plus 11v11 tackle. Plays stay on this device until you export them.</p>
+      <button type="button" class="row-btn danger" onClick={props.onDelete}>
+        Erase this play
+      </button>
+      <p class="fine">Plays stay on this phone. If you erase one, tap Undo.</p>
     </Sheet>
   )
 }
@@ -305,30 +299,30 @@ export function ExportSheet(props: {
   onClose: () => void
 }) {
   return (
-    <Sheet title="Export" onClose={props.onClose}>
+    <Sheet title="Save" onClose={props.onClose}>
       <div class="checks">
         <button type="button" class="chip" aria-pressed={props.includeNotes} onClick={props.onToggleNotes}>
           Notes
         </button>
         <button type="button" class="chip" aria-pressed={props.includeAssignments} onClick={props.onToggleAssignments}>
-          Assignments
+          Jobs
         </button>
       </div>
       <button type="button" class="primary wide" disabled={props.busy} onClick={() => props.onPng('print')}>
-        Print white PNG
+        Save white picture
       </button>
       <button type="button" class="primary wide ghost" disabled={props.busy} onClick={() => props.onPng('color')}>
-        Color field PNG
+        Save color picture
       </button>
-      <p class="fine">Letter size, 150 dpi. Print white is black line art on white. Color field is green turf with the same icons.</p>
+      <p class="fine">Pictures are letter size. White is for printing. Color looks like the field.</p>
       <button type="button" class="row-btn" onClick={props.onJsonPlay}>
-        Download this play (JSON)
+        Save this play
       </button>
       <button type="button" class="row-btn" onClick={props.onJsonBook}>
-        Download playbook (JSON)
+        Save all plays
       </button>
       <button type="button" class="row-btn" onClick={props.onImport}>
-        Import JSON
+        Open a file
       </button>
     </Sheet>
   )

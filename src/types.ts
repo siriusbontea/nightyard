@@ -79,6 +79,16 @@ export function formatLabel(id: FormatId): string {
   return FORMATS.find((format) => format.id === id)?.label ?? id
 }
 
+/** Short count for the phone UI. Printed sheets still use formatLabel. */
+export function formatShort(id: FormatId): string {
+  const count = FORMATS.find((format) => format.id === id)?.offense
+  return count ? `${count} on ${count}` : id
+}
+
+export function formatStyle(id: FormatId): string {
+  return id === '11v11' ? 'tackle' : 'flag'
+}
+
 export function isFormatId(value: string): value is FormatId {
   return FORMATS.some((format) => format.id === value)
 }

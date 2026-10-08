@@ -27,14 +27,18 @@ export function usePlaybook() {
   const [bookName, setBookName] = useState('Night Yard')
   const [history, setHistory] = useState<History | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+  const [toastUndo, setToastUndo] = useState<(() => void) | null>(null)
+  const [saved, setSaved] = useState(false)
   const [memoryOnly, setMemoryOnly] = useState(false)
+  const deletedRef = useRef<Play | null>(null)
   const playsRef = useRef(plays)
   const historyRef = useRef(history)
   playsRef.current = plays
   historyRef.current = history
 
-  function notify(message: string) {
+  function notify(message: string, undo?: () => void) {
     setToast(message)
+    setToastUndo(() => undo ?? null)
   }
 
   function publish(next: History) {
@@ -59,7 +63,7 @@ export function usePlaybook() {
         setPlays([starter])
         setHistory(createHistory(starter))
         setMemoryOnly(true)
-        setToast('This browser blocked saving. You can still export a JSON file.')
+        setToast("Can't save on this phone. Use More, then Save a file.")
         setReady(true)
       })
     return () => {
@@ -71,17 +75,26 @@ export function usePlaybook() {
 
   useEffect(() => {
     if (!ready || !play || memoryOnly) return
+    setSaved(false)
     const handle = window.setTimeout(() => {
-      savePlay(play).catch(() => setToast('Could not save on this device.'))
+      savePlay(play)
+        .then(() => setSaved(true))
+        .catch(() => {
+          setToast('Could not save on this phone.')
+          setToastUndo(() => null)
+        })
     }, 280)
     return () => window.clearTimeout(handle)
   }, [play, ready, memoryOnly])
 
   useEffect(() => {
     if (!toast) return
-    const handle = window.setTimeout(() => setToast(null), 2800)
+    const handle = window.setTimeout(() => {
+      setToast(null)
+      setToastUndo(() => null)
+    }, toastUndo ? 6000 : 2800)
     return () => window.clearTimeout(handle)
-  }, [toast])
+  }, [toast, toastUndo])
 
   function update(next: Play) {
     const current = historyRef.current
@@ -99,7 +112,7 @@ export function usePlaybook() {
 
   async function create(format: FormatId = '5v5') {
     const created = createPlay({ format, formationId: format === '11v11' ? 'shotgun-trips' : 'doubles', name: nextName(playsRef.current) })
-    if (!memoryOnly) await savePlay(created).catch(() => setToast('Could not save on this device.'))
+    if (!memoryOnly) await savePlay(created).then(() => setSaved(true)).catch(() => setToast('Could not save on this phone.'))
     setPlays([created, ...playsRef.current])
     const next = createHistory(created)
     historyRef.current = next
@@ -113,7 +126,7 @@ export function usePlaybook() {
     if (historyRef.current?.present.id === id) update(renamed)
     else {
       setPlays(replacePlay(playsRef.current, { ...renamed, updatedAt: Date.now() }))
-      if (!memoryOnly) await savePlay({ ...renamed, updatedAt: Date.now() }).catch(() => setToast('Could not save on this device.'))
+      if (!memoryOnly) await savePlay({ ...renamed, updatedAt: Date.now() }).catch(() => setToast('Could not save on this phone.'))
     }
   }
 
@@ -121,17 +134,27 @@ export function usePlaybook() {
     const found = playsRef.current.find((item) => item.id === id)
     if (!found) return
     const copy = duplicatePlay(found)
-    if (!memoryOnly) await savePlay(copy).catch(() => setToast('Could not save on this device.'))
+    if (!memoryOnly) await savePlay(copy).catch(() => setToast('Could not save on this phone.'))
     setPlays([copy, ...playsRef.current])
     const next = createHistory(copy)
     historyRef.current = next
     setHistory(next)
-    notify(`Duplicated ${found.name}`)
+    notify('Made a copy')
   }
 
   async function remove(id: string) {
+    const found = playsRef.current.find((item) => item.id === id)
+    if (!found) return
+    if (!memoryOnly) {
+      try {
+        await deletePlay(id)
+      } catch {
+        notify('Could not delete that play.')
+        return
+      }
+    }
+    deletedRef.current = found
     const remaining = playsRef.current.filter((item) => item.id !== id)
-    if (!memoryOnly) await deletePlay(id).catch(() => setToast('Could not delete that play.'))
     setPlays(remaining)
     if (historyRef.current?.present.id === id) {
       const fallback = remaining[0] ?? null
@@ -139,12 +162,34 @@ export function usePlaybook() {
       historyRef.current = next
       setHistory(next)
     }
+    notify('Deleted. Tap Undo.', () => {
+      void restoreDeleted()
+    })
+  }
+
+  async function restoreDeleted() {
+    const found = deletedRef.current
+    if (!found) return
+    deletedRef.current = null
+    if (!memoryOnly) {
+      try {
+        await savePlay(found)
+      } catch {
+        notify('Could not bring that play back.')
+        return
+      }
+    }
+    setPlays(playsRef.current.some((item) => item.id === found.id) ? playsRef.current : [found, ...playsRef.current])
+    const next = createHistory(found)
+    historyRef.current = next
+    setHistory(next)
+    notify('Brought it back.')
   }
 
   async function renameBook(name: string) {
     const trimmed = name.trim() || 'Night Yard'
     setBookName(trimmed)
-    if (!memoryOnly) await savePlaybookName(trimmed).catch(() => setToast('Could not rename the playbook.'))
+    if (!memoryOnly) await savePlaybookName(trimmed).catch(() => setToast('Could not rename the plays.'))
   }
 
   async function importJson(text: string) {
@@ -164,7 +209,7 @@ export function usePlaybook() {
     const next = createHistory(bundle.plays[0])
     historyRef.current = next
     setHistory(next)
-    notify(bundle.plays.length === 1 ? `Imported ${bundle.plays[0].name}` : `Imported ${bundle.plays.length} plays`)
+    notify(bundle.plays.length === 1 ? `Opened ${bundle.plays[0].name}` : `Opened ${bundle.plays.length} plays`)
   }
 
   function doUndo() {
@@ -185,6 +230,8 @@ export function usePlaybook() {
     bookName,
     play,
     toast,
+    toastUndo,
+    saved,
     notify,
     canUndo: history ? canUndo(history) : false,
     canRedo: history ? canRedo(history) : false,

@@ -32,6 +32,27 @@ export function kindLabel(kind: StrokeKind): string {
   return 'Route'
 }
 
+const PLAIN_PRESET: Record<PresetId, string> = {
+  go: 'Straight',
+  slant: 'Cut in',
+  out: 'Cut out',
+  in: 'Come in',
+  post: 'Deep in',
+  corner: 'Deep out',
+  hitch: 'Stop',
+  curl: 'Come back',
+  wheel: 'Around',
+  drag: 'Across',
+  motion: 'Before',
+  block: 'Stop them',
+  run: 'Carry',
+}
+
+/** One plain word under the real route name. */
+export function plainPreset(preset: PresetId): string {
+  return PLAIN_PRESET[preset]
+}
+
 /**
  * Build a preset in field yards. `inside` is +1 when breaks toward +x are inside.
  * Upfield is +y.
