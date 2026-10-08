@@ -64,7 +64,10 @@ export function cameraForBox(widthPx: number, heightPx: number, los = 50): Camer
     ahead = top + extra / 2
     behind = -bottom + extra / 2
   } else {
-    behind = Math.min(18, Math.max(8, depth * 0.28))
+    // Keep the line in the lower-middle of the frame: formation behind it,
+    // routes ahead of it, and the whole window still on marked ground.
+    behind = Math.min(36, Math.max(10, depth * 0.38))
+    if (behind > depth - 12) behind = Math.max(8, depth - 12)
     ahead = depth - behind
     if (ahead > top) {
       ahead = top

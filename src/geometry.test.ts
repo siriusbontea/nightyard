@@ -60,7 +60,11 @@ describe('route geometry', () => {
     expect(depth).toBeCloseTo((FIELD_WIDTH * height) / width, 5)
     expect(camera.ahead).toBeLessThanOrEqual(60)
     expect(-camera.behind).toBeGreaterThanOrEqual(-60)
-    expect(camera.behind).toBeGreaterThan(8)
+    expect(camera.behind).toBeGreaterThan(12)
+    const depthPx = camera.ahead + camera.behind
+    const losFromTop = camera.ahead / depthPx
+    expect(losFromTop).toBeGreaterThan(0.25)
+    expect(losFromTop).toBeLessThan(0.75)
     const wide = cameraForBox(980, 420, 50)
     expect(wide.ahead + wide.behind).toBeCloseTo((FIELD_WIDTH * 420) / 980, 5)
     expect(wide.ahead).toBeGreaterThan(0)

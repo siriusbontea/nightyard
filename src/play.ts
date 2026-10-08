@@ -40,23 +40,21 @@ export function createPlay(options: {
 }
 
 export function showcasePlay(): Play {
-  const play = createPlay({ format: '5v5', formationId: 'doubles', name: 'Slant Read' })
-  play.notes = 'Hit the slant if the corner sits. If he jumps it, take the corner behind him. Y motions inside, then wheels.'
+  const play = createPlay({ format: '11v11', formationId: 'shotgun-trips', name: 'Stick' })
+  play.notes = 'X stops on the hitch. Y takes the corner if the corner bails. Z runs the go. The back flares to the flat.'
   const byLabel = Object.fromEntries(play.players.map((player) => [player.label, player]))
-  byLabel.Z.read = 1
-  byLabel.X.read = 2
-  byLabel.Y.read = 3
+  byLabel.X.read = 1
+  byLabel.Y.read = 2
+  byLabel.Z.read = 3
   const strokes: Stroke[] = []
   const add = (label: string, preset: PresetId, origin?: Point) => {
     const player = byLabel[label]
     strokes.push(makeStroke(uid(), player.id, preset, presetFromPlayer(preset, player, origin)))
   }
-  add('Z', 'slant')
-  add('X', 'corner')
-  add('Y', 'motion')
-  const motionEnd = pointOnStroke(strokes[strokes.length - 1], 1)
-  add('Y', 'wheel', motionEnd)
-  add('C', 'block')
+  add('X', 'hitch')
+  add('Y', 'corner')
+  add('Z', 'go')
+  add('RB', 'out')
   play.strokes = strokes
   return play
 }

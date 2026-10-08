@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "build:prod": "tsc --noEmit && BASE_PATH=/playbook/ vite build",
+    "build:prod": "tsc --noEmit && BASE_PATH=/nightyard/ vite build",
     "preview": "vite preview",
     "test": "vitest run",
     "icons": "node scripts/icons.mjs"

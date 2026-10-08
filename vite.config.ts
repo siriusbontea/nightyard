@@ -4,7 +4,7 @@ import { defineConfig } from 'vitest/config'
 import { navigationAllowlist, normalizeBase } from './src/basePath.ts'
 
 export default defineConfig(({ command }) => {
-  const base = normalizeBase(process.env.BASE_PATH, command === 'build' ? '/playbook/' : '/')
+  const base = normalizeBase(process.env.BASE_PATH, command === 'build' ? '/nightyard/' : '/')
   return {
     base,
     plugins: process.env.VITEST

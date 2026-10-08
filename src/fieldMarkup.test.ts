@@ -121,7 +121,7 @@ describe('player markers', () => {
     for (let i = 1; i < lines.length; i++) {
       expect(lines[i] - lines[i - 1]).toBeLessThanOrEqual(5 * camera.scale + 0.2)
     }
-    const endZones = [...svg.matchAll(new RegExp(`<rect x="0" y="([\\d.]+)" width="[^"]+" height="([\\d.]+)" fill="${NIGHT.endZone}"`, 'g'))]
+    const endZones = [...svg.matchAll(new RegExp(`<rect x="0" y="(-?[\\d.]+)" width="[^"]+" height="([\\d.]+)" fill="${NIGHT.endZone}"`, 'g'))]
     const edgeCovered = (edge: number, line: number) => {
       if (Math.abs(line - edge) <= 5 * camera.scale + 2) return true
       return endZones.some((match) => {
@@ -134,6 +134,40 @@ describe('player markers', () => {
     }
     expect(edgeCovered(0, lines[0])).toBe(true)
     expect(edgeCovered(h, lines[lines.length - 1])).toBe(true)
+  })
+
+  it('fills a phone-shaped frame from the top edge to the bottom edge', () => {
+    for (const [width, height] of [
+      [390, 844],
+      [390, 700],
+      [430, 932],
+    ] as const) {
+      const camera = cameraForBox(width, height, 50)
+      const { w, h } = viewSize(camera)
+      expect(w / h).toBeCloseTo(width / height, 4)
+      const losY = camera.ahead * camera.scale
+      expect(losY).toBeGreaterThan(h * 0.2)
+      expect(losY).toBeLessThan(h * 0.75)
+      const svg = fieldMarkup({ play: showcasePlay(), camera, theme: NIGHT })
+      const lines = [...svg.matchAll(/<line x1="0" y1="([\d.]+)" x2="([\d.]+)" y2="([\d.]+)"/g)]
+        .filter((match) => Math.abs(Number(match[2]) - w) < 1)
+        .map((match) => Number(match[1]))
+        .sort((a, b) => a - b)
+      const endZones = [...svg.matchAll(new RegExp(`<rect x="0" y="(-?[\\d.]+)" width="[^"]+" height="([\\d.]+)" fill="${NIGHT.endZone}"`, 'g'))]
+      const edgeCovered = (edge: number, line: number) => {
+        if (Math.abs(line - edge) <= 5 * camera.scale + 2) return true
+        return endZones.some((match) => {
+          const y = Number(match[1])
+          const heightPx = Number(match[2])
+          const from = Math.min(edge, line)
+          const to = Math.max(edge, line)
+          return y <= from + 1 && y + heightPx >= to - 1
+        })
+      }
+      expect(lines.length, `${width}x${height}`).toBeGreaterThan(4)
+      expect(edgeCovered(0, lines[0]), `${width}x${height} top`).toBe(true)
+      expect(edgeCovered(h, lines[lines.length - 1]), `${width}x${height} bottom`).toBe(true)
+    }
   })
 
   it('numbers a midfield snap up to the 50 and back down, and hides both end zones', () => {

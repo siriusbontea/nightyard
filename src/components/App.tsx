@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { cameraForBox } from '../geometry'
 import { applyPreset, clearPlayerStrokes, deleteStroke, serializePlay, serializePlaybook, slug, updatePlayer } from '../play'
 import { renderPng } from '../pngExport'
 import { downloadBlob, downloadText } from '../download'
 import { ballLabel } from '../play'
 import { usePlaybook } from '../usePlaybook'
-import type { FormatId, StrokeKind } from '../types'
+import type { StrokeKind } from '../types'
 import { formatShort } from '../types'
 import { Field } from './Field'
 import { PlaybookList } from './PlaybookList'
@@ -16,6 +16,14 @@ type SheetId = null | 'book' | 'presets' | 'player' | 'more' | 'export' | 'play'
 const SPEEDS = [0.5, 1, 1.5] as const
 const SPEED_WORD: Record<(typeof SPEEDS)[number], string> = { 0.5: 'Slow', 1: 'Normal', 1.5: 'Fast' }
 const DRAW_WORD: Record<StrokeKind, string> = { route: 'Line', motion: 'Walk', block: 'Block', run: 'Run' }
+
+/** Guess the field frame before it is measured so the first paint is already full. */
+function openingCamera(los = 50) {
+  if (typeof window === 'undefined') return cameraForBox(390, 680, los)
+  const width = Math.max(40, Math.min(window.innerWidth, 560) - 20)
+  const height = Math.max(280, window.innerHeight - 210)
+  return cameraForBox(width, height, los)
+}
 
 export function App() {
   const book = usePlaybook()
@@ -30,16 +38,17 @@ export function App() {
   const [includeNotes, setIncludeNotes] = useState(true)
   const [includeAssignments, setIncludeAssignments] = useState(true)
   const [busy, setBusy] = useState(false)
-  const [camera, setCamera] = useState(() => cameraForBox(360, 520, 50))
+  const [camera, setCamera] = useState(() => openingCamera(50))
   const frameRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const play = book.play
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = frameRef.current
     if (!el) return
     const measure = () => {
       const rect = el.getBoundingClientRect()
+      if (rect.width < 40 || rect.height < 40) return
       setCamera(cameraForBox(rect.width, rect.height, play?.los ?? 50))
     }
     measure()
@@ -102,8 +111,8 @@ export function App() {
     setT(0)
   }
 
-  function startNew(format: FormatId) {
-    void book.create(format).then(() => {
+  function startNew() {
+    void book.create('11v11').then(() => {
       setSelectedPlayerId(null)
       setSelectedStrokeId(null)
       stopPlayback()
@@ -142,7 +151,7 @@ export function App() {
         <p class="brand">Night Yard</p>
         <h1>No plays yet</h1>
         <p class="empty-copy">Tap the button. Then pick how many players.</p>
-        <button type="button" class="primary" onClick={() => startNew('5v5')}>
+        <button type="button" class="primary" onClick={() => startNew()}>
           New play
         </button>
         <button type="button" class="primary ghost" onClick={() => fileRef.current?.click()}>
@@ -191,7 +200,7 @@ export function App() {
           onRename={book.rename}
           onDuplicate={book.duplicate}
           onDelete={book.remove}
-          onCreate={() => startNew(play.format)}
+          onCreate={() => startNew()}
         />
       </aside>
       <div class="stage">
@@ -349,7 +358,7 @@ export function App() {
               setSheet(null)
             }}
             onDelete={book.remove}
-            onCreate={() => startNew(play.format)}
+            onCreate={() => startNew()}
           />
         </Sheet>
       ) : null}

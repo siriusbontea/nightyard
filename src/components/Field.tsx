@@ -306,7 +306,7 @@ export function Field(props: FieldProps) {
       ref={svgRef}
       class="field"
       viewBox={`0 0 ${size.w} ${size.h}`}
-      preserveAspectRatio="xMidYMid meet"
+      preserveAspectRatio="none"
       role="img"
       aria-label={`${props.play.name} field`}
     />

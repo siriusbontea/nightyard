@@ -14,14 +14,16 @@ describe('playbook save and load', () => {
     const first = await loadPlaybook()
     expect(first.name).toBe('Night Yard')
     expect(first.plays).toHaveLength(1)
-    expect(first.plays[0].name).toBe('Slant Read')
+    expect(first.plays[0].name).toBe('Stick')
+    expect(first.plays[0].format).toBe('11v11')
+    expect(first.plays[0].los).toBe(50)
 
     const extra = createPlay({ format: '7v7', formationId: 'spread', name: 'Flood' })
     await savePlay(extra)
     await savePlaybookName('Friday night')
     const loaded = await loadPlaybook()
     expect(loaded.name).toBe('Friday night')
-    expect(loaded.plays.map((play) => play.name).sort()).toEqual(['Flood', 'Slant Read'])
+    expect(loaded.plays.map((play) => play.name).sort()).toEqual(['Flood', 'Stick'])
 
     await deletePlay(extra.id)
     const after = await loadPlaybook()

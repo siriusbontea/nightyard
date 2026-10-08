@@ -110,8 +110,8 @@ export function usePlaybook() {
     setHistory(next)
   }
 
-  async function create(format: FormatId = '5v5') {
-    const created = createPlay({ format, formationId: format === '11v11' ? 'shotgun-trips' : 'doubles', name: nextName(playsRef.current) })
+  async function create(format: FormatId = '11v11') {
+    const created = createPlay({ format, formationId: format === '11v11' ? 'shotgun-trips' : undefined, name: nextName(playsRef.current) })
     if (!memoryOnly) await savePlay(created).then(() => setSaved(true)).catch(() => setToast('Could not save on this phone.'))
     setPlays([created, ...playsRef.current])
     const next = createHistory(created)

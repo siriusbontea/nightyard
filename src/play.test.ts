@@ -16,6 +16,7 @@ import {
   offenseCount,
   parseBundle,
   renamePlay,
+  sanitizePlay,
   serializePlay,
   serializePlaybook,
   showcasePlay,
@@ -79,13 +80,27 @@ describe('play model', () => {
     expect(play.players.filter((player) => player.role === 'ol').every((player) => player.shape === 'square')).toBe(true)
   })
 
-  it('gives the starter a slant, a curved corner, motion, and a block', () => {
+  it('starts on 11v11 tackle at the 50 with routes that miss the yard numbers', () => {
     const play = showcasePlay()
-    const kinds = play.strokes.map((stroke) => stroke.kind).sort()
-    expect(kinds).toEqual(['block', 'motion', 'route', 'route', 'route'])
-    expect(play.strokes.some((stroke) => stroke.preset === 'slant')).toBe(true)
+    expect(play.format).toBe('11v11')
+    expect(play.formationId).toBe('shotgun-trips')
+    expect(play.los).toBe(50)
+    expect(play.ourSide).toBe('offense')
+    expect(play.name).toBe('Stick')
+    expect(play.players.filter((player) => player.side === 'offense')).toHaveLength(11)
+    expect(play.players.every((player) => player.color === OUR_COLOR)).toBe(true)
+    expect(play.strokes.map((stroke) => stroke.preset).sort()).toEqual(['corner', 'go', 'hitch', 'out'])
     expect(play.strokes.some((stroke) => stroke.curves.some(Boolean))).toBe(true)
-    expect(play.players.find((player) => player.label === 'Z')?.read).toBe(1)
+    expect(play.players.find((player) => player.label === 'X')?.read).toBe(1)
+    const columns = [12, FIELD_WIDTH - 12]
+    for (const stroke of play.strokes) {
+      const samples = [...stroke.points, ...stroke.curves.filter((point): point is { x: number; y: number } => point !== null)]
+      for (const point of samples) {
+        for (const column of columns) {
+          expect(Math.abs(point.x - column), stroke.preset ?? '').toBeGreaterThan(2.2)
+        }
+      }
+    }
   })
 
   it('duplicates with fresh ids that strokes still point at', () => {
@@ -125,6 +140,10 @@ describe('play model', () => {
     expect(offenseCount(eleven)).toBe(11)
     expect(eleven.strokes).toHaveLength(0)
     expect(eleven.formation).toBe('Shotgun Trips')
+    expect(eleven.los).toBe(50)
+    const onTheTwenty = applyFormation({ ...play, los: 25 }, '5v5', 'doubles')
+    expect(onTheTwenty.los).toBe(25)
+    expect(setOurSide(onTheTwenty, 'defense').los).toBe(25)
   })
 
   it('round-trips JSON and rejects a Canadian 12-player file', () => {
@@ -152,10 +171,22 @@ describe('play model', () => {
   it('describes assignments from the route, then prefers a written note', () => {
     const play = showcasePlay()
     const z = play.players.find((player) => player.label === 'Z')!
-    expect(describeAssignment(z, play.strokes)).toMatch(/slant/i)
+    expect(describeAssignment(z, play.strokes)).toMatch(/go/i)
     const noted = { ...z, note: 'Sit if the flat is taken' }
     expect(describeAssignment(noted, play.strokes)).toContain('Sit if the flat is taken')
-    expect(assignmentRows(play).some((row) => row.label === 'C' && /block/i.test(row.detail))).toBe(true)
+    expect(assignmentRows(play).some((row) => row.label === 'X' && /hitch/i.test(row.detail))).toBe(true)
+  })
+
+  it('keeps a saved line and puts a missing line on the 50', () => {
+    const play = createPlay({ format: '5v5', formationId: 'doubles', name: 'Flag mesh' })
+    play.los = 15
+    const packed = JSON.parse(serializePlay(play)) as { play: { los?: number; format: string } }
+    const kept = parseBundle(JSON.stringify(packed)).plays[0]
+    expect(kept.los).toBe(15)
+    expect(kept.format).toBe('5v5')
+    expect(sanitizePlay({ ...packed.play, los: 15 })?.los).toBe(15)
+    delete packed.play.los
+    expect(parseBundle(JSON.stringify(packed)).plays[0].los).toBe(50)
   })
 
   it('paints your team orange and the other team lime, and starts on the 50', () => {
