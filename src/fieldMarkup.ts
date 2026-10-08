@@ -167,8 +167,8 @@ function playerMarkup(player: Player, play: Play, camera: Camera, theme: Theme, 
 }
 
 function yardArrow(x: number, y: number, dir: 'up' | 'down', scale: number): string {
-  const height = 0.9 * scale
-  const half = 0.42 * scale
+  const height = 1.45 * scale
+  const half = 0.62 * scale
   const tip = dir === 'up' ? y - height : y + height
   const base = y
   return `M${x.toFixed(1)} ${tip.toFixed(1)} L${(x - half).toFixed(1)} ${base.toFixed(1)} L${(x + half).toFixed(1)} ${base.toFixed(1)} Z`
@@ -189,7 +189,7 @@ function yardNumbers(los: number, scale: number, ahead: number, height: number, 
     parts.push(`<text ${attrs} transform="rotate(-90 ${left.toFixed(1)} ${y.toFixed(1)})">${label}</text>`)
     parts.push(`<text ${attrs} transform="rotate(90 ${right.toFixed(1)} ${y.toFixed(1)})">${label}</text>`)
     if (!arrow) continue
-    const shift = (arrow === 'up' ? -2.35 : 2.35) * scale
+    const shift = (arrow === 'up' ? -2.7 : 2.7) * scale
     const inset = 2.5 * scale
     parts.push(`<path data-arrow="${arrow}" d="${yardArrow(left + inset, y + shift, arrow, scale)}" fill="${theme.number}"/>`)
     parts.push(`<path data-arrow="${arrow}" d="${yardArrow(right - inset, y + shift, arrow, scale)}" fill="${theme.number}"/>`)
@@ -271,7 +271,7 @@ export function fieldMarkup(options: {
   parts.push(
     `<line x1="0" y1="${losY}" x2="${w}" y2="${losY}" stroke="${theme.los}" stroke-width="3.2"${theme.losGlow ? ` filter="url(#glow-${theme.id})"` : ''}/>`,
   )
-  const tagX = w - 7.6 * scale
+  const tagX = 13.2 * scale
   const tagFill = theme.outlineOnly ? '#ffffff' : '#062018'
   const tagInk = theme.outlineOnly ? '#111111' : theme.los
   parts.push(
