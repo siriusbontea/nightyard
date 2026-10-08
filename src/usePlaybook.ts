@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { commit, createHistory, redo, undo, canRedo, canUndo, type History } from './history'
-import { createPlay, duplicatePlay, parseBundle, renamePlay } from './play'
+import { createPlay, duplicatePlay, parseBundle, renamePlay, resetPlay } from './play'
 import { deletePlay, loadPlaybook, savePlay, savePlaybookName } from './storage'
 import { showcasePlay } from './play'
 import type { FormatId, Play } from './types'
@@ -212,6 +212,16 @@ export function usePlaybook() {
     notify(bundle.plays.length === 1 ? `Opened ${bundle.plays[0].name}` : `Opened ${bundle.plays.length} plays`)
   }
 
+  function reset() {
+    const current = historyRef.current
+    if (!current) return
+    const restored = resetPlay(current.present)
+    const next = createHistory(restored)
+    historyRef.current = next
+    setHistory(next)
+    setPlays(replacePlay(playsRef.current, restored))
+  }
+
   function doUndo() {
     const current = historyRef.current
     if (!current) return
@@ -241,6 +251,7 @@ export function usePlaybook() {
     rename,
     duplicate,
     remove,
+    reset,
     renameBook,
     importJson,
     undo: doUndo,

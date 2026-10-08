@@ -22,7 +22,7 @@ export function createPlay(options: {
 }): Play {
   const formation = formationById(options.format, options.formationId ?? formationById(options.format, '').id)
   const now = Date.now()
-  return {
+  return rememberStart({
     id: options.id ?? uid(),
     name: options.name ?? 'New play',
     formation: formation.name,
@@ -36,6 +36,31 @@ export function createPlay(options: {
     strokes: [],
     createdAt: now,
     updatedAt: now,
+  })
+}
+
+function withoutOrigin(play: Play): Play {
+  const copy = JSON.parse(JSON.stringify(play)) as Play
+  delete copy.origin
+  return copy
+}
+
+/** Remember the starting look once. Later edits do not move it. */
+export function rememberStart(play: Play): Play {
+  if (play.origin) return play
+  return { ...play, origin: withoutOrigin(play) }
+}
+
+/** Put this play back to its starting look. The id stays so the rest of the book is untouched. */
+export function resetPlay(play: Play): Play {
+  const start = JSON.parse(JSON.stringify(play.origin ?? withoutOrigin(play))) as Play
+  delete start.origin
+  return {
+    ...start,
+    id: play.id,
+    createdAt: play.createdAt,
+    updatedAt: Date.now(),
+    origin: JSON.parse(JSON.stringify(start)) as Play,
   }
 }
 
@@ -56,7 +81,8 @@ export function showcasePlay(): Play {
   add('Z', 'go')
   add('RB', 'out')
   play.strokes = strokes
-  return play
+  delete play.origin
+  return rememberStart(play)
 }
 
 export function duplicatePlay(play: Play): Play {
@@ -74,7 +100,7 @@ export function duplicatePlay(play: Play): Play {
     curves: stroke.curves.map((curve) => (curve ? { ...curve } : null)),
   }))
   const now = Date.now()
-  return {
+  const copy: Play = {
     ...play,
     id: uid(),
     name: `${play.name} copy`,
@@ -83,6 +109,8 @@ export function duplicatePlay(play: Play): Play {
     createdAt: now,
     updatedAt: now,
   }
+  delete copy.origin
+  return rememberStart(copy)
 }
 
 export function renamePlay(play: Play, name: string): Play {
@@ -311,7 +339,7 @@ export function sanitizePlay(input: unknown): Play | null {
   const now = Date.now()
   const format = raw.format
   const formationId = typeof raw.formationId === 'string' ? raw.formationId : formationById(format, '').id
-  return {
+  const play: Play = {
     id: typeof raw.id === 'string' ? raw.id : uid(),
     name: typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim().slice(0, 80) : 'Imported play',
     formation: typeof raw.formation === 'string' && raw.formation.trim() ? raw.formation.trim().slice(0, 40) : formationById(format, formationId).name,
@@ -326,6 +354,9 @@ export function sanitizePlay(input: unknown): Play | null {
     createdAt: typeof raw.createdAt === 'number' ? raw.createdAt : now,
     updatedAt: typeof raw.updatedAt === 'number' ? raw.updatedAt : now,
   }
+  const stored = raw.origin ? sanitizePlay({ ...raw.origin, origin: undefined }) : null
+  play.origin = stored ? withoutOrigin(stored) : withoutOrigin(play)
+  return play
 }
 
 export interface ParsedBundle {

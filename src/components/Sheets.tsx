@@ -324,13 +324,39 @@ export function MoreSheet(props: {
   onDuplicate: () => void
   onDelete: () => void
   onExport: () => void
+  onReset: () => void
   onClose: () => void
 }) {
+  const [askReset, setAskReset] = useState(false)
+  if (askReset) {
+    return (
+      <Sheet title="Reset?" onClose={() => setAskReset(false)}>
+        <p class="fine">This puts the play back to how it started. You cannot undo it by staying on this screen. Your other plays stay.</p>
+        <button type="button" class="primary wide choice" onClick={() => setAskReset(false)}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          class="primary wide choice danger"
+          onClick={() => {
+            setAskReset(false)
+            props.onReset()
+          }}
+        >
+          Reset
+        </button>
+      </Sheet>
+    )
+  }
   return (
     <Sheet title="More" onClose={props.onClose}>
       <button type="button" class="row-btn" onClick={() => props.onChange(setShowDefense(props.play, !props.play.showDefense))}>
         {props.play.showDefense ? 'Hide the other team' : 'Show the other team'}
         <small>{formatShort(props.play.format)}</small>
+      </button>
+      <button type="button" class="row-btn" onClick={() => setAskReset(true)}>
+        Reset
+        <small>Back to how it started</small>
       </button>
       <button type="button" class="row-btn" onClick={props.onExport}>
         Save pictures and files

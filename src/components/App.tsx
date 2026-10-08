@@ -422,6 +422,13 @@ export function App() {
             setSelectedPlayerId(null)
           }}
           onExport={() => setSheet('export')}
+          onReset={() => {
+            book.reset()
+            setSelectedPlayerId(null)
+            setSelectedStrokeId(null)
+            stopPlayback()
+            setSheet(null)
+          }}
           onClose={() => setSheet(null)}
         />
       ) : null}

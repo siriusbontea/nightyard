@@ -70,6 +70,8 @@ export interface Play {
   strokes: Stroke[]
   createdAt: number
   updatedAt: number
+  /** How this play looked when it was created, or when it was last saved before this app remembered a start. Reset uses it. */
+  origin?: Play
 }
 
 export const FORMATS: { id: FormatId; label: string; offense: number }[] = [

@@ -357,6 +357,8 @@ textarea { min-height: 96px; resize: vertical; }
   color: var(--teal);
   box-shadow: inset 0 0 0 1.5px rgba(46, 230, 200, 0.7);
 }
+.choice { min-height: 56px; font-size: 18px; }
+.choice.danger { background: var(--danger); color: #fff; }
 .primary.wide, .row-btn { width: 100%; }
 .stack, .sheet-body .primary { margin-top: 8px; }
 .row-btn {

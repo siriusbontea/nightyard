@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { commit, createHistory, redo, undo } from './history'
+import { canUndo, commit, createHistory, redo, undo } from './history'
 import { MOTION_SPLIT, playerAtTime } from './playback'
 import { applyPosition } from './positions'
 import {
@@ -18,6 +18,7 @@ import {
   offenseCount,
   parseBundle,
   renamePlay,
+  resetPlay,
   sanitizePlay,
   serializePlay,
   serializePlaybook,
@@ -117,6 +118,34 @@ describe('play model', () => {
     const preview = presetFromPlayer('wheel', y, presetOrigin(withMotion, y.id, 'wheel'))
     expect(preview.points).toEqual(drawn.points)
     expect(preview.curves).toEqual(drawn.curves)
+  })
+
+  it('puts this play back to how it started and leaves the other plays alone', () => {
+    const start = showcasePlay()
+    const player = start.players.find((item) => item.label === 'X')!
+    const edited = translatePlayer({ ...start, los: 20, name: 'Moved' }, player.id, player.x + 3, player.y - 1)
+    const restored = resetPlay(edited)
+    expect(restored.id).toBe(start.id)
+    expect(restored.name).toBe('Stick')
+    expect(restored.format).toBe('11v11')
+    expect(restored.los).toBe(50)
+    expect(restored.ourSide).toBe('offense')
+    expect(restored.players.every((item) => item.color === OUR_COLOR)).toBe(true)
+    expect(restored.strokes.map((stroke) => stroke.preset).sort()).toEqual(['corner', 'go', 'hitch', 'out'])
+    expect(restored.players.find((item) => item.label === 'X')?.x).toBeCloseTo(player.x)
+    const other = createPlay({ format: '5v5', formationId: 'doubles', name: 'Flag mesh' })
+    const book = [restored, other]
+    expect(book[1]).toBe(other)
+    expect(book[1].name).toBe('Flag mesh')
+    const history = createHistory(restored)
+    expect(canUndo(history)).toBe(false)
+    const old = createPlay({ format: '7v7', formationId: 'spread', name: 'Flood' })
+    delete old.origin
+    const remembered = { ...old, origin: undefined }
+    const savedStart = resetPlay({ ...remembered, name: 'Flood edit', los: 10, origin: old })
+    expect(savedStart.name).toBe('Flood')
+    expect(savedStart.los).toBe(50)
+    expect(savedStart.id).toBe(old.id)
   })
 
   it('duplicates with fresh ids that strokes still point at', () => {
