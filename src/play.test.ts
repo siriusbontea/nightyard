@@ -5,6 +5,8 @@ import { applyPosition } from './positions'
 import {
   applyFormation,
   applyPreset,
+  presetOnPlayer,
+  presetOrigin,
   isPlayerShown,
   setOurSide,
   updatePlayer,
@@ -24,7 +26,7 @@ import {
 } from './play'
 import { OUR_COLOR, THEIR_COLOR, defenseFor, formationsFor } from './formations'
 import { FIELD_WIDTH, PLAYER_R } from './geometry'
-import { presetPath } from './presets'
+import { presetFromPlayer, presetPath } from './presets'
 import { FORMATS, type Player, type Stroke } from './types'
 
 describe('play model', () => {
@@ -101,6 +103,20 @@ describe('play model', () => {
         }
       }
     }
+  })
+
+  it('shows the path already on a player, and previews the same line the field draws', () => {
+    const play = showcasePlay()
+    const x = play.players.find((player) => player.label === 'X')!
+    expect(presetOnPlayer(play, x.id)).toBe('hitch')
+    const fresh = createPlay({ format: '11v11', formationId: 'shotgun-trips' })
+    const y = fresh.players.find((player) => player.label === 'Y')!
+    const withMotion = applyPreset(fresh, y.id, 'motion')
+    const next = applyPreset(withMotion, y.id, 'wheel')
+    const drawn = next.strokes.find((stroke) => stroke.preset === 'wheel')!
+    const preview = presetFromPlayer('wheel', y, presetOrigin(withMotion, y.id, 'wheel'))
+    expect(preview.points).toEqual(drawn.points)
+    expect(preview.curves).toEqual(drawn.curves)
   })
 
   it('duplicates with fresh ids that strokes still point at', () => {

@@ -324,10 +324,25 @@ textarea { min-height: 96px; resize: vertical; }
   background: #0c1322;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 8px 10px;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 4px;
+  min-height: 96px;
+  padding: 8px;
   text-align: left;
+}
+.preset[aria-pressed='true'] {
+  border-color: transparent;
+  box-shadow: inset 0 0 0 3px var(--teal);
+  background: #10281f;
+}
+.preset[aria-pressed='true'] span { color: var(--teal); }
+.path-preview {
+  width: 100%;
+  height: 52px;
+  border-radius: 8px;
+  display: block;
+  pointer-events: none;
 }
 .preset small { color: var(--muted); font-size: 12px; font-weight: 650; }
 .primary {

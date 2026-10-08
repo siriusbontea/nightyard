@@ -75,6 +75,17 @@ describe('player markers', () => {
     expect(labelFontSize('QB', radius, 'diamond')).toBeLessThan(radius * 1.2)
   })
 
+  it('draws a football emoji at the ball, with a laced ball underneath', () => {
+    const svg = fieldMarkup({ play: showcasePlay(), camera: EXPORT_CAMERA, theme: NIGHT })
+    expect(svg).toContain('🏈')
+    expect(svg).toContain('class="ball-fallback"')
+    expect(svg).toContain('class="ball-emoji"')
+    const printed = fieldMarkup({ play: showcasePlay(), camera: EXPORT_CAMERA, theme: PRINT })
+    expect(printed).toContain('🏈')
+    expect(printed).toContain('class="ball-fallback"')
+    expect(printed).toContain('fill="#ffffff"')
+  })
+
   it('draws readable yard numbers on both sidelines, including the 50', () => {
     const width = 360
     const height = 640

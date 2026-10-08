@@ -134,15 +134,24 @@ export function clearPlayerStrokes(play: Play, playerId: string): Play {
   return { ...play, strokes: play.strokes.filter((stroke) => stroke.playerId !== playerId) }
 }
 
+/** Where a path starts. A path after motion leaves from the end of that motion. */
+export function presetOrigin(play: Play, playerId: string, preset: PresetId): Point | undefined {
+  if (kindForPreset(preset) === 'motion') return undefined
+  const motion = play.strokes.find((stroke) => stroke.playerId === playerId && stroke.kind === 'motion')
+  return motion ? pointOnStroke(motion, 1) : undefined
+}
+
+/** The path already on this player, so the Paths screen can show it as chosen. */
+export function presetOnPlayer(play: Play, playerId: string): PresetId | null {
+  const strokes = play.strokes.filter((stroke) => stroke.playerId === playerId && stroke.preset)
+  const main = strokes.find((stroke) => stroke.kind !== 'motion')
+  return (main ?? strokes[0])?.preset ?? null
+}
+
 export function applyPreset(play: Play, playerId: string, preset: PresetId): Play {
   const player = play.players.find((item) => item.id === playerId)
   if (!player) return play
-  let origin: Point | undefined
-  if (kindForPreset(preset) !== 'motion') {
-    const motion = play.strokes.find((stroke) => stroke.playerId === playerId && stroke.kind === 'motion')
-    if (motion) origin = pointOnStroke(motion, 1)
-  }
-  return setStroke(play, makeStroke(uid(), playerId, preset, presetFromPlayer(preset, player, origin)))
+  return setStroke(play, makeStroke(uid(), playerId, preset, presetFromPlayer(preset, player, presetOrigin(play, playerId, preset))))
 }
 
 export function isPlayerShown(play: Play, player: Player): boolean {

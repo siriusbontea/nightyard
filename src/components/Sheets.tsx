@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
 import { formationsFor, shapeFor } from '../formations'
-import { applyFormation, setOurSide, setShowDefense } from '../play'
+import { applyFormation, presetOnPlayer, setOurSide, setShowDefense } from '../play'
 import { applyPosition, positionSelected, positionsFor } from '../positions'
 import { ROUTE_PRESETS, plainPreset, presetLabel } from '../presets'
-import type { Play, Player } from '../types'
+import type { Play, Player, PresetId } from '../types'
 import { FORMATS, formatShort, formatStyle, ourSideOf, type FormatId } from '../types'
+import { PathPreview } from './PathPreview'
 
 export function Sheet(props: { title: string; onClose: () => void; children: ComponentChildren }) {
   useEffect(() => {
@@ -165,6 +166,9 @@ export function PresetSheet(props: {
 }) {
   const visible = props.play.players.filter((player) => player.side === ourSideOf(props.play) || props.play.showDefense)
   const selected = visible.find((player) => player.id === props.selectedId) ?? null
+  const [picked, setPicked] = useState<{ playerId: string; preset: PresetId } | null>(null)
+  const fromPlay = selected ? presetOnPlayer(props.play, selected.id) : null
+  const highlighted = selected && picked?.playerId === selected.id ? picked.preset : fromPlay
   return (
     <Sheet title="Paths" onClose={props.onClose}>
       <p class="field-label">Who</p>
@@ -187,7 +191,17 @@ export function PresetSheet(props: {
           <p class="field-label">For {selected.label}</p>
           <div class="preset-grid">
             {ROUTE_PRESETS.map((preset) => (
-              <button key={preset.id} type="button" class="preset" onClick={() => props.onApply(selected.id, preset.id)}>
+              <button
+                key={preset.id}
+                type="button"
+                class="preset"
+                aria-pressed={preset.id === highlighted}
+                onClick={() => {
+                  setPicked({ playerId: selected.id, preset: preset.id })
+                  props.onApply(selected.id, preset.id)
+                }}
+              >
+                <PathPreview play={props.play} player={selected} preset={preset.id} />
                 <span>{preset.label}</span>
                 <small>{plainPreset(preset.id)}</small>
               </button>

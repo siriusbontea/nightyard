@@ -1,3 +1,4 @@
+import { ballMarkup } from './ball'
 import { END_ZONE_DEPTH, FIELD_LENGTH, HASH_INSET, displayedYard, fieldYAt, numberArrow } from './fieldMarks'
 import { FIELD_WIDTH, PLAYER_R, fieldToSvg, segmentTangent, viewSize, type Camera } from './geometry'
 import { isPlayerShown } from './play'
@@ -286,9 +287,7 @@ export function fieldMarkup(options: {
     `<g transform="translate(${tagX.toFixed(1)} ${(losY - 46).toFixed(1)})"><rect width="42" height="18" rx="9" fill="${tagFill}" stroke="${tagInk}" stroke-width="1.4"/><text x="21" y="10" fill="${tagInk}" font-family="Oswald, Impact, sans-serif" font-size="11" text-anchor="middle" dominant-baseline="central">LINE</text></g>`,
   )
   const ball = fieldToSvg({ x: FIELD_WIDTH / 2, y: -0.85 }, camera)
-  parts.push(
-    `<ellipse cx="${ball.x.toFixed(1)}" cy="${ball.y.toFixed(1)}" rx="${(0.55 * scale).toFixed(1)}" ry="${(0.82 * scale).toFixed(1)}" fill="${theme.ballFill}" stroke="${theme.ballStroke}" stroke-width="1.2" transform="rotate(-28 ${ball.x.toFixed(1)} ${ball.y.toFixed(1)})"/>`,
-  )
+  parts.push(ballMarkup(ball.x, ball.y, scale, theme.ballFill, theme.ballStroke))
   parts.push(yardNumbers(play.los, scale, ahead, h, theme))
   const visible = (player: Player) => isPlayerShown(play, player)
   const strokes = play.strokes.filter((stroke) => {
