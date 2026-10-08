@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { fieldMarkup, labelFontSize, labelInk } from './fieldMarkup'
-import { defenseFor } from './formations'
+import { OUR_COLOR, THEIR_COLOR, defenseFor } from './formations'
 import { EXPORT_CAMERA, PLAYER_R } from './geometry'
-import { createPlay, setShowDefense, showcasePlay } from './play'
+import { createPlay, setOurSide, setShowDefense, showcasePlay } from './play'
 import { NIGHT, PRINT } from './theme'
 
 function labelTag(svg: string, label: string): string {
@@ -56,6 +56,7 @@ describe('player markers', () => {
     expect(labelInk('#d5dde8')).toBe('#102033')
     expect(labelInk('#e7eef8')).toBe('#102033')
     expect(labelInk('#ffffff')).toBe('#102033')
+    expect(labelInk('#d6f25a')).toBe('#102033')
     expect(labelInk('#0b1220')).toBe('#f8fafc')
 
     const night = fieldMarkup({ play: showcasePlay(), camera: EXPORT_CAMERA, theme: NIGHT })
@@ -72,5 +73,34 @@ describe('player markers', () => {
     const radius = 16
     expect(labelFontSize('X', radius, 'circle')).toBeGreaterThan(labelFontSize('SLT', radius, 'circle'))
     expect(labelFontSize('QB', radius, 'diamond')).toBeLessThan(radius * 1.2)
+  })
+
+  it('numbers a midfield snap up to the 50 and back down, and hides both end zones', () => {
+    const svg = fieldMarkup({ play: showcasePlay(), camera: EXPORT_CAMERA, theme: NIGHT })
+    expect(svg.match(/>50</g)).toHaveLength(2)
+    expect(svg.match(/>40</g)).toHaveLength(4)
+    expect(svg.match(/>30</g)).toHaveLength(2)
+    expect(svg).toContain('data-arrow="up"')
+    expect(svg).toContain('data-arrow="down"')
+    expect(svg).not.toContain(NIGHT.endZone)
+    expect(svg).toContain(`fill="${OUR_COLOR}"`)
+    const close = createPlay({ format: '5v5', formationId: 'doubles' })
+    close.los = 10
+    const redZone = fieldMarkup({ play: close, camera: EXPORT_CAMERA, theme: NIGHT })
+    expect(redZone).toContain(NIGHT.endZone)
+    expect(redZone).not.toContain('data-arrow="down"')
+  })
+
+  it('uses team colors on a defense play and keeps path colors different', () => {
+    const play = setShowDefense(setOurSide(createPlay({ format: '5v5', formationId: 'doubles' }), 'defense'), true)
+    const svg = fieldMarkup({ play, camera: EXPORT_CAMERA, theme: NIGHT })
+    expect(svg).toContain(`fill="${OUR_COLOR}"`)
+    expect(svg).toContain(`fill="${THEIR_COLOR}"`)
+    const routes = new Set(play.players.map((player) => player.routeColor))
+    expect(routes.size).toBeGreaterThan(3)
+    for (const color of routes) expect(color).not.toBe(OUR_COLOR)
+    const printed = fieldMarkup({ play, camera: EXPORT_CAMERA, theme: PRINT })
+    expect(printed).toContain('>40<')
+    expect(printed).toContain('fill="#ffffff"')
   })
 })

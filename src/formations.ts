@@ -1,6 +1,6 @@
 import { FIELD_WIDTH } from './geometry'
 import { uid } from './id'
-import type { FormatId, Player, Role, Shape } from './types'
+import type { FormatId, Player, Role, Shape, Side } from './types'
 
 export interface Spot {
   label: string
@@ -15,36 +15,38 @@ export interface FormationTemplate {
   spots: Spot[]
 }
 
-const WR_COLORS: Record<string, string> = {
-  X: '#38bdf8',
-  Y: '#d6f25a',
-  Z: '#fb7185',
-  H: '#fdba74',
-  W: '#67e8f9',
+/** Your team. Same orange as the old quarterback mark. */
+export const OUR_COLOR = '#f0c14a'
+
+/** The other team. Same lime as the old Y mark. */
+export const THEIR_COLOR = '#d6f25a'
+
+/** Path colors. None of these is the orange or the lime, so a line never matches a team. */
+export const ROUTE_PALETTE = [
+  '#38bdf8',
+  '#fb7185',
+  '#c084fc',
+  '#22d3ee',
+  '#f472b6',
+  '#818cf8',
+  '#f43f5e',
+  '#a78bfa',
+  '#7dd3fc',
+  '#e879f9',
+  '#60a5fa',
+  '#fda4af',
+] as const
+
+export function shapeFor(role: Role): Shape {
+  if (role === 'qb') return 'diamond'
+  if (role === 'center' || role === 'ol' || role === 'dl') return 'square'
+  return 'circle'
 }
 
-export function styleFor(role: Role, label: string): { shape: Shape; color: string } {
-  switch (role) {
-    case 'qb':
-      return { shape: 'diamond', color: '#f0c14a' }
-    case 'center':
-      return { shape: 'square', color: '#c4b5fd' }
-    case 'ol':
-      return { shape: 'square', color: '#94a3b8' }
-    case 'dl':
-      return { shape: 'square', color: '#d5dde8' }
-    case 'lb':
-    case 'db':
-      return { shape: 'circle', color: '#e7eef8' }
-    case 'rb':
-      return { shape: 'circle', color: '#f472b6' }
-    case 'fb':
-      return { shape: 'circle', color: '#fbbf24' }
-    case 'te':
-      return { shape: 'circle', color: '#a5b4fc' }
-    case 'wr':
-      return { shape: 'circle', color: WR_COLORS[label] ?? '#38bdf8' }
-  }
+export function routeColorAt(index: number): string {
+  const palette = ROUTE_PALETTE
+  const wrapped = ((index % palette.length) + palette.length) % palette.length
+  return palette[wrapped]
 }
 
 /** Yard line of the ball and the center, halfway between the sidelines. */
@@ -303,8 +305,7 @@ export function formationById(format: FormatId, id: string): FormationTemplate {
   return list.find((formation) => formation.id === id) ?? list[0]
 }
 
-export function playerFromSpot(spotDef: Spot, side: 'offense' | 'defense'): Player {
-  const style = styleFor(spotDef.role, spotDef.label)
+export function playerFromSpot(spotDef: Spot, side: Side, mine: boolean, routeIndex: number): Player {
   return {
     id: uid(),
     label: spotDef.label,
@@ -312,17 +313,18 @@ export function playerFromSpot(spotDef: Spot, side: 'offense' | 'defense'): Play
     side,
     x: spotDef.x,
     y: spotDef.y,
-    color: style.color,
-    shape: style.shape,
+    color: mine ? OUR_COLOR : THEIR_COLOR,
+    routeColor: routeColorAt(routeIndex),
+    shape: shapeFor(spotDef.role),
     read: null,
     note: '',
   }
 }
 
-export function offenseFor(format: FormatId, formationId: string): Player[] {
-  return formationById(format, formationId).spots.map((item) => playerFromSpot(item, 'offense'))
+export function offenseFor(format: FormatId, formationId: string, mine = true, routeStart = 0): Player[] {
+  return formationById(format, formationId).spots.map((item, index) => playerFromSpot(item, 'offense', mine, routeStart + index))
 }
 
-export function defenseFor(format: FormatId): Player[] {
-  return DEFENSE[format].map((item) => playerFromSpot(item, 'defense'))
+export function defenseFor(format: FormatId, mine = false, routeStart = 6): Player[] {
+  return DEFENSE[format].map((item, index) => playerFromSpot(item, 'defense', mine, routeStart + index))
 }

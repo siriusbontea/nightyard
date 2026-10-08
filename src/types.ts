@@ -35,7 +35,10 @@ export interface Player {
   side: Side
   x: number
   y: number
+  /** Team fill. Orange is your team, lime is the other team. */
   color: string
+  /** Line color, kept different for each player so paths stay easy to follow. */
+  routeColor: string
   shape: Shape
   read: number | null
   note: string
@@ -56,9 +59,12 @@ export interface Play {
   formation: string
   formationId: string
   format: FormatId
-  /** Yard line from the goal line being attacked. 15 means "ball on the 15". */
+  /** Yards from the goal line being attacked. 50 is midfield. */
   los: number
   notes: string
+  /** Which side of the ball your team is on. */
+  ourSide: Side
+  /** When true, the other team is drawn. */
   showDefense: boolean
   players: Player[]
   strokes: Stroke[]
@@ -91,4 +97,8 @@ export function formatStyle(id: FormatId): string {
 
 export function isFormatId(value: string): value is FormatId {
   return FORMATS.some((format) => format.id === value)
+}
+
+export function ourSideOf(play: { ourSide?: Side }): Side {
+  return play.ourSide === 'defense' ? 'defense' : 'offense'
 }

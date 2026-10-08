@@ -1,6 +1,8 @@
+import { END_ZONE_DEPTH, FIELD_LENGTH, HASH_INSET, displayedYard, fieldYAt, numberArrow } from './fieldMarks'
 import { FIELD_WIDTH, PLAYER_R, fieldToSvg, segmentTangent, viewSize, type Camera } from './geometry'
+import { isPlayerShown } from './play'
 import type { Theme } from './theme'
-import type { Play, Player, Point, Stroke } from './types'
+import { ourSideOf, type Play, type Player, type Point, type Stroke } from './types'
 
 export function escapeXml(value: string): string {
   return value
@@ -45,7 +47,7 @@ function arrowPath(tip: Point, dir: Point, size: number): string {
 function routeMarkup(stroke: Stroke, play: Play, camera: Camera, theme: Theme, selected: boolean): string {
   if (stroke.points.length < 2) return ''
   const player = play.players.find((item) => item.id === stroke.playerId)
-  const color = theme.outlineOnly ? '#111111' : safeColor(player?.color ?? '#e2e8f0')
+  const color = theme.outlineOnly ? '#111111' : safeColor(player?.routeColor || player?.color || '#38bdf8')
   const outline = theme.outlineOnly ? '#ffffff' : theme.routeOutline
   const inner = (stroke.kind === 'run' ? 0.62 : 0.5) * camera.scale
   const outer = inner + 0.28 * camera.scale
@@ -136,7 +138,7 @@ export function labelFontSize(label: string, radius: number, shape: Player['shap
   return Math.min(fromWidth, fromHeight)
 }
 
-function playerMarkup(player: Player, camera: Camera, theme: Theme, selected: boolean): string {
+function playerMarkup(player: Player, play: Play, camera: Camera, theme: Theme, selected: boolean): string {
   const pos = fieldToSvg(player, camera)
   const radius = PLAYER_R * camera.scale
   const fill = theme.outlineOnly ? '#ffffff' : safeColor(player.color)
@@ -156,12 +158,43 @@ function playerMarkup(player: Player, camera: Camera, theme: Theme, selected: bo
   const size = labelFontSize(player.label, radius, player.shape)
   const label = `<text x="0" y="0" fill="${labelInk(fill)}" font-family="Oswald, Impact, sans-serif" font-size="${size.toFixed(1)}" font-weight="600" text-anchor="middle" dominant-baseline="central">${escapeXml(player.label)}</text>`
   let badge = ''
-  if (player.read && player.side === 'offense') {
+  if (player.read && player.side === ourSideOf(play)) {
     const bx = radius * 0.82
     const by = -radius * 0.82
     badge = `<g transform="translate(${bx.toFixed(1)} ${by.toFixed(1)})"><circle r="9.5" fill="${theme.badgeFill}" stroke="${theme.badgeStroke}" stroke-width="1.6"/><text fill="${theme.badgeText}" font-family="Oswald, Impact, sans-serif" font-size="12" font-weight="600" text-anchor="middle" dominant-baseline="central">${player.read}</text></g>`
   }
   return `<g data-player-id="${escapeXml(player.id)}" transform="translate(${pos.x.toFixed(2)} ${pos.y.toFixed(2)})">${ring}${shape}${label}${badge}</g>`
+}
+
+function yardArrow(x: number, y: number, dir: 'up' | 'down', scale: number): string {
+  const height = 0.9 * scale
+  const half = 0.42 * scale
+  const tip = dir === 'up' ? y - height : y + height
+  const base = y
+  return `M${x.toFixed(1)} ${tip.toFixed(1)} L${(x - half).toFixed(1)} ${base.toFixed(1)} L${(x + half).toFixed(1)} ${base.toFixed(1)} Z`
+}
+
+/** Sideways 10-yard numbers, counting up to midfield and back down, with a goal arrow. */
+function yardNumbers(los: number, scale: number, ahead: number, height: number, theme: Theme): string {
+  const parts: string[] = []
+  const size = 2.8 * scale
+  const left = 9 * scale
+  const right = (FIELD_WIDTH - 9) * scale
+  const attrs = `fill="${theme.number}" stroke="${theme.numberStroke}" stroke-width="${(scale * 0.18).toFixed(2)}" paint-order="stroke" font-family="Oswald, Impact, sans-serif" font-size="${size.toFixed(1)}" font-weight="500" text-anchor="middle" dominant-baseline="central"`
+  for (let yard = 10; yard <= 90; yard += 10) {
+    const y = (ahead - fieldYAt(los, yard)) * scale
+    if (y < size || y > height - size) continue
+    const label = displayedYard(yard)
+    const arrow = numberArrow(yard)
+    parts.push(`<text ${attrs} transform="rotate(-90 ${left.toFixed(1)} ${y.toFixed(1)})">${label}</text>`)
+    parts.push(`<text ${attrs} transform="rotate(90 ${right.toFixed(1)} ${y.toFixed(1)})">${label}</text>`)
+    if (!arrow) continue
+    const shift = (arrow === 'up' ? -2.35 : 2.35) * scale
+    const inset = 2.5 * scale
+    parts.push(`<path data-arrow="${arrow}" d="${yardArrow(left + inset, y + shift, arrow, scale)}" fill="${theme.number}"/>`)
+    parts.push(`<path data-arrow="${arrow}" d="${yardArrow(right - inset, y + shift, arrow, scale)}" fill="${theme.number}"/>`)
+  }
+  return parts.join('')
 }
 
 export function fieldMarkup(options: {
@@ -175,9 +208,9 @@ export function fieldMarkup(options: {
   const { play, camera, theme } = options
   const { w, h } = viewSize(camera)
   const { scale, ahead } = camera
-  const goalSvg = (ahead - play.los) * scale
-  const stripe = 5 * scale
   const parts: string[] = []
+  const svgY = (fieldY: number) => (ahead - fieldY) * scale
+  const seen = (y: number, pad = 0) => y >= -pad && y <= h + pad
   parts.push(`<defs>
     <filter id="grain-${theme.id}" x="0" y="0" width="100%" height="100%">
       <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="2" seed="4"/>
@@ -195,15 +228,19 @@ export function fieldMarkup(options: {
   </defs>`)
   parts.push(`<g clip-path="url(#clip-${theme.id})">`)
   parts.push(`<rect width="${w}" height="${h}" fill="${theme.turf[0]}"/>`)
-  for (let band = -6; band < 28; band++) {
-    if (band % 2 === 0) continue
-    const y = goalSvg + band * stripe
+  const stripe = 5 * scale
+  for (let yard = 0; yard < FIELD_LENGTH; yard += 5) {
+    if (Math.floor(yard / 5) % 2 === 0) continue
+    const y = svgY(fieldYAt(play.los, yard))
     if (y > h || y + stripe < 0) continue
     parts.push(`<rect x="0" y="${y.toFixed(1)}" width="${w}" height="${stripe}" fill="${theme.turf[1]}"/>`)
   }
-  const ezTop = goalSvg - 10 * scale
-  if (ezTop < h && ezTop + 10 * scale > 0) {
-    parts.push(`<rect x="0" y="${ezTop.toFixed(1)}" width="${w}" height="${(10 * scale).toFixed(1)}" fill="${theme.endZone}"/>`)
+  for (const goal of [0, FIELD_LENGTH]) {
+    const topField = goal === 0 ? fieldYAt(play.los, 0) + END_ZONE_DEPTH : fieldYAt(play.los, FIELD_LENGTH)
+    const y = svgY(topField)
+    const height = END_ZONE_DEPTH * scale
+    if (y > h || y + height < 0) continue
+    parts.push(`<rect x="0" y="${y.toFixed(1)}" width="${w}" height="${height.toFixed(1)}" fill="${theme.endZone}"/>`)
   }
   if (theme.grain) {
     parts.push(`<rect width="${w}" height="${h}" filter="url(#grain-${theme.id})" opacity="${theme.id === 'night' ? 0.16 : 0.08}"/>`)
@@ -211,34 +248,24 @@ export function fieldMarkup(options: {
   if (theme.vignette) {
     parts.push(`<rect width="${w}" height="${h}" fill="url(#vig-${theme.id})"/>`)
   }
-  for (let yard = 0; yard <= 100; yard += 5) {
-    const y = goalSvg + yard * scale
-    if (y < -2 || y > h + 2) continue
-    const width = yard === 0 ? 2.6 : yard % 10 === 0 ? 1.8 : 1.15
+  for (let yard = 0; yard <= FIELD_LENGTH; yard += 5) {
+    const y = svgY(fieldYAt(play.los, yard))
+    if (!seen(y, 2)) continue
+    const width = yard === 0 || yard === FIELD_LENGTH ? 2.6 : yard % 10 === 0 ? 1.8 : 1.15
     parts.push(`<line x1="0" y1="${y.toFixed(2)}" x2="${w}" y2="${y.toFixed(2)}" stroke="${theme.line}" stroke-width="${width}"/>`)
   }
-  const hashL = 20 * scale
-  const hashR = (FIELD_WIDTH - 20) * scale
+  const hashL = HASH_INSET * scale
+  const hashR = (FIELD_WIDTH - HASH_INSET) * scale
   const tick = 0.7 * scale
-  for (let yard = 1; yard < 100; yard++) {
+  for (let yard = 1; yard < FIELD_LENGTH; yard += 1) {
     if (yard % 5 === 0) continue
-    const y = goalSvg + yard * scale
-    if (y < 0 || y > h) continue
+    const y = svgY(fieldYAt(play.los, yard))
+    if (!seen(y)) continue
     const stroke = theme.lineSoft
-    parts.push(`<line x1="0" y1="${y}" x2="${tick.toFixed(1)}" y2="${y}" stroke="${stroke}" stroke-width="1.1"/>`)
-    parts.push(`<line x1="${(hashL - tick).toFixed(1)}" y1="${y}" x2="${hashL.toFixed(1)}" y2="${y}" stroke="${stroke}" stroke-width="1.1"/>`)
-    parts.push(`<line x1="${hashR.toFixed(1)}" y1="${y}" x2="${(hashR + tick).toFixed(1)}" y2="${y}" stroke="${stroke}" stroke-width="1.1"/>`)
-    parts.push(`<line x1="${(w - tick).toFixed(1)}" y1="${y}" x2="${w}" y2="${y}" stroke="${stroke}" stroke-width="1.1"/>`)
-  }
-  for (const n of [10, 20, 30, 40, 50]) {
-    const y = goalSvg + n * scale
-    if (y < 36 || y > h - 36) continue
-    const size = 3.2 * scale
-    const left = 11.5 * scale
-    const right = (FIELD_WIDTH - 11.5) * scale
-    const attrs = `fill="${theme.number}" stroke="${theme.numberStroke}" stroke-width="${(scale * 0.16).toFixed(2)}" paint-order="stroke" font-family="Oswald, Impact, sans-serif" font-size="${size.toFixed(1)}" font-weight="500" text-anchor="middle" dominant-baseline="central"`
-    parts.push(`<text ${attrs} transform="rotate(-90 ${left.toFixed(1)} ${y.toFixed(1)})">${n}</text>`)
-    parts.push(`<text ${attrs} transform="rotate(90 ${right.toFixed(1)} ${y.toFixed(1)})">${n}</text>`)
+    parts.push(`<line x1="0" y1="${y.toFixed(1)}" x2="${tick.toFixed(1)}" y2="${y.toFixed(1)}" stroke="${stroke}" stroke-width="1.1"/>`)
+    parts.push(`<line x1="${(hashL - tick).toFixed(1)}" y1="${y.toFixed(1)}" x2="${(hashL + tick).toFixed(1)}" y2="${y.toFixed(1)}" stroke="${stroke}" stroke-width="1.1"/>`)
+    parts.push(`<line x1="${(hashR - tick).toFixed(1)}" y1="${y.toFixed(1)}" x2="${(hashR + tick).toFixed(1)}" y2="${y.toFixed(1)}" stroke="${stroke}" stroke-width="1.1"/>`)
+    parts.push(`<line x1="${(w - tick).toFixed(1)}" y1="${y.toFixed(1)}" x2="${w}" y2="${y.toFixed(1)}" stroke="${stroke}" stroke-width="1.1"/>`)
   }
   const losY = ahead * scale
   parts.push(
@@ -248,13 +275,14 @@ export function fieldMarkup(options: {
   const tagFill = theme.outlineOnly ? '#ffffff' : '#062018'
   const tagInk = theme.outlineOnly ? '#111111' : theme.los
   parts.push(
-    `<g transform="translate(${tagX.toFixed(1)} ${(losY - 14).toFixed(1)})"><rect width="42" height="18" rx="9" fill="${tagFill}" stroke="${tagInk}" stroke-width="1.4"/><text x="21" y="10" fill="${tagInk}" font-family="Oswald, Impact, sans-serif" font-size="11" text-anchor="middle" dominant-baseline="central">LINE</text></g>`,
+    `<g transform="translate(${tagX.toFixed(1)} ${(losY - 46).toFixed(1)})"><rect width="42" height="18" rx="9" fill="${tagFill}" stroke="${tagInk}" stroke-width="1.4"/><text x="21" y="10" fill="${tagInk}" font-family="Oswald, Impact, sans-serif" font-size="11" text-anchor="middle" dominant-baseline="central">LINE</text></g>`,
   )
   const ball = fieldToSvg({ x: FIELD_WIDTH / 2, y: -0.85 }, camera)
   parts.push(
     `<ellipse cx="${ball.x.toFixed(1)}" cy="${ball.y.toFixed(1)}" rx="${(0.55 * scale).toFixed(1)}" ry="${(0.82 * scale).toFixed(1)}" fill="${theme.ballFill}" stroke="${theme.ballStroke}" stroke-width="1.2" transform="rotate(-28 ${ball.x.toFixed(1)} ${ball.y.toFixed(1)})"/>`,
   )
-  const visible = (player: Player) => player.side === 'offense' || play.showDefense
+  parts.push(yardNumbers(play.los, scale, ahead, h, theme))
+  const visible = (player: Player) => isPlayerShown(play, player)
   const strokes = play.strokes.filter((stroke) => {
     const owner = play.players.find((player) => player.id === stroke.playerId)
     return owner ? visible(owner) : false
@@ -262,9 +290,12 @@ export function fieldMarkup(options: {
   for (const stroke of strokes) {
     parts.push(routeMarkup(stroke, play, camera, theme, stroke.id === options.selectedStrokeId))
   }
-  const ordered = [...play.players.filter((player) => player.side === 'defense' && play.showDefense), ...play.players.filter((player) => player.side === 'offense')]
+  const ordered = [
+    ...play.players.filter((player) => player.side !== ourSideOf(play) && play.showDefense),
+    ...play.players.filter((player) => player.side === ourSideOf(play)),
+  ]
   for (const player of ordered) {
-    parts.push(playerMarkup(player, camera, theme, player.id === options.selectedPlayerId))
+    parts.push(playerMarkup(player, play, camera, theme, player.id === options.selectedPlayerId))
   }
   if (options.showHandles && options.selectedStrokeId) {
     const selected = play.strokes.find((stroke) => stroke.id === options.selectedStrokeId)

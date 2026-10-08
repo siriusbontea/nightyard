@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
-import { formationsFor } from '../formations'
-import { applyFormation, setShowDefense } from '../play'
+import { formationsFor, shapeFor } from '../formations'
+import { applyFormation, setOurSide, setShowDefense } from '../play'
+import { applyPosition, positionSelected, positionsFor } from '../positions'
 import { ROUTE_PRESETS, plainPreset, presetLabel } from '../presets'
 import type { Play, Player } from '../types'
-import { FORMATS, formatShort, formatStyle, type FormatId } from '../types'
+import { FORMATS, formatShort, formatStyle, ourSideOf, type FormatId } from '../types'
 
 export function Sheet(props: { title: string; onClose: () => void; children: ComponentChildren }) {
   useEffect(() => {
@@ -78,6 +79,26 @@ export function PlaySettings(props: { play: Play; onChange: (play: Play) => void
           onInput={(event) => setFormation((event.currentTarget as HTMLInputElement).value)}
         />
       </label>
+      <p class="field-label">Who has the ball?</p>
+      <div class="chips">
+        <button
+          type="button"
+          class="chip"
+          aria-pressed={ourSideOf(play) === 'offense'}
+          onClick={() => props.onChange(setOurSide(edited(), 'offense'))}
+        >
+          Us
+        </button>
+        <button
+          type="button"
+          class="chip"
+          aria-pressed={ourSideOf(play) === 'defense'}
+          onClick={() => props.onChange(setOurSide(edited(), 'defense'))}
+        >
+          Them
+        </button>
+      </div>
+      <p class="fine">Orange is your team. Lime is the other team.</p>
       <p class="field-label">How many</p>
       <div class="chips">
         {FORMATS.map((format) => (
@@ -93,7 +114,7 @@ export function PlaySettings(props: { play: Play; onChange: (play: Play) => void
           </button>
         ))}
       </div>
-      <p class="field-label">Lineup</p>
+      <p class="field-label">{ourSideOf(play) === 'defense' ? 'Their lineup' : 'Lineup'}</p>
       <div class="chips">
         {formationsFor(play.format).map((template) => (
           <button
@@ -130,7 +151,7 @@ export function PlaySettings(props: { play: Play; onChange: (play: Play) => void
           onInput={(event) => setNotes((event.currentTarget as HTMLTextAreaElement).value)}
         />
       </label>
-      <p class="fine">Changing the lineup erases the lines. Undo brings them back.</p>
+      <p class="fine">Changing who has the ball, or the lineup, erases the lines. Undo brings them back.</p>
     </Sheet>
   )
 }
@@ -142,7 +163,7 @@ export function PresetSheet(props: {
   onApply: (playerId: string, preset: (typeof ROUTE_PRESETS)[number]['id']) => void
   onClose: () => void
 }) {
-  const visible = props.play.players.filter((player) => player.side === 'offense' || props.play.showDefense)
+  const visible = props.play.players.filter((player) => player.side === ourSideOf(props.play) || props.play.showDefense)
   const selected = visible.find((player) => player.id === props.selectedId) ?? null
   return (
     <Sheet title="Paths" onClose={props.onClose}>
@@ -218,6 +239,31 @@ export function PlayerSheet(props: {
           onInput={(event) => setLabel((event.currentTarget as HTMLInputElement).value)}
         />
       </label>
+      <p class="field-label">Position</p>
+      <div class="pos-grid">
+        {positionsFor(props.play.format, player.side).map((option) => {
+          const options = positionsFor(props.play.format, player.side)
+          const pressed = positionSelected({ ...player, label }, option, options)
+          return (
+            <button
+              key={option.id}
+              type="button"
+              class="pos"
+              aria-pressed={pressed}
+              aria-label={option.label}
+              onClick={() => {
+                const next = applyPosition(props.play, current(), option.id)
+                setLabel(next.label)
+                props.onChange(next)
+              }}
+            >
+              <span class={`mark ${shapeFor(option.role)} ${player.side === ourSideOf(props.play) ? 'ours' : 'theirs'}`}>
+                <span>{option.label}</span>
+              </span>
+            </button>
+          )
+        })}
+      </div>
       <p class="field-label">Order</p>
       <p class="fine">1 goes first.</p>
       <div class="chips">

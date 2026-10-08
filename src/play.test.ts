@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { commit, createHistory, redo, undo } from './history'
 import { MOTION_SPLIT, playerAtTime } from './playback'
+import { applyPosition } from './positions'
 import {
   applyFormation,
   applyPreset,
+  isPlayerShown,
+  setOurSide,
+  updatePlayer,
   assignmentRows,
   createPlay,
   describeAssignment,
@@ -17,7 +21,7 @@ import {
   showcasePlay,
   translatePlayer,
 } from './play'
-import { defenseFor, formationsFor } from './formations'
+import { OUR_COLOR, THEIR_COLOR, defenseFor, formationsFor } from './formations'
 import { FIELD_WIDTH, PLAYER_R } from './geometry'
 import { presetPath } from './presets'
 import { FORMATS, type Player, type Stroke } from './types'
@@ -153,6 +157,52 @@ describe('play model', () => {
     expect(describeAssignment(noted, play.strokes)).toContain('Sit if the flat is taken')
     expect(assignmentRows(play).some((row) => row.label === 'C' && /block/i.test(row.detail))).toBe(true)
   })
+
+  it('paints your team orange and the other team lime, and starts on the 50', () => {
+    const play = createPlay({ format: '11v11', formationId: 'i-form' })
+    expect(play.los).toBe(50)
+    expect(play.ourSide).toBe('offense')
+    expect(play.players.every((player) => player.color === OUR_COLOR)).toBe(true)
+    expect(new Set(play.players.map((player) => player.routeColor)).size).toBe(play.players.length)
+    const defending = setOurSide(play, 'defense')
+    expect(defending.players.filter((player) => player.side === 'defense')).toHaveLength(11)
+    expect(defending.players.filter((player) => player.side === 'defense').every((player) => player.color === OUR_COLOR)).toBe(true)
+    expect(defending.players.filter((player) => player.side === 'offense').every((player) => player.color === THEIR_COLOR)).toBe(true)
+    expect(defending.showDefense).toBe(true)
+    const ours = defending.players.find((player) => player.side === 'defense')!
+    const theirs = defending.players.find((player) => player.side === 'offense')!
+    const hidden = { ...defending, showDefense: false }
+    expect(isPlayerShown(hidden, ours)).toBe(true)
+    expect(isPlayerShown(hidden, theirs)).toBe(false)
+  })
+
+  it('keeps a saved route color when an older play had a position color', () => {
+    const play = createPlay({ format: '5v5', formationId: 'doubles' })
+    const packed = JSON.parse(serializePlay(play)) as { play: { ourSide?: string; players: { color: string; routeColor?: string }[] } }
+    delete packed.play.ourSide
+    delete packed.play.players[0].routeColor
+    packed.play.players[0].color = '#38bdf8'
+    const loaded = parseBundle(JSON.stringify(packed)).plays[0]
+    expect(loaded.ourSide).toBe('offense')
+    expect(loaded.players[0].color).toBe(OUR_COLOR)
+    expect(loaded.players[0].routeColor).toBe('#38bdf8')
+    expect(loaded.players).toHaveLength(play.players.length)
+  })
+
+  it('swaps a fullback for a second tight end without changing the count, and undo puts the fullback back', () => {
+    const play = createPlay({ format: '11v11', formationId: 'i-form' })
+    const fb = play.players.find((player) => player.label === 'FB')!
+    const next = updatePlayer(play, fb.id, applyPosition(play, fb, 'te'))
+    expect(next.players).toHaveLength(11)
+    const swapped = next.players.find((player) => player.id === fb.id)!
+    expect(swapped.label).toBe('TE2')
+    expect(swapped.role).toBe('te')
+    expect(swapped.shape).toBe('circle')
+    expect(swapped.side).toBe('offense')
+    const restored = undo(commit(createHistory(play), next))
+    expect(restored.present.players.find((player) => player.id === fb.id)?.label).toBe('FB')
+    expect(redo(restored).present.players.find((player) => player.id === fb.id)?.label).toBe('TE2')
+  })
 })
 
 describe('playback', () => {
@@ -163,7 +213,8 @@ describe('playback', () => {
     side: 'offense',
     x: 10,
     y: 0,
-    color: '#d6f25a',
+    color: '#f0c14a',
+    routeColor: '#38bdf8',
     shape: 'circle',
     read: null,
     note: '',

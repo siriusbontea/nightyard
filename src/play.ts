@@ -1,11 +1,11 @@
-import { defenseFor, formationById, offenseFor } from './formations'
+import { OUR_COLOR, THEIR_COLOR, defenseFor, formationById, offenseFor, routeColorAt, shapeFor } from './formations'
 import { pointOnStroke } from './geometry'
 import { canRedo, canUndo, commit, createHistory, redo, undo, type History } from './history'
 import { uid } from './id'
 import { playerAtTime } from './playback'
 import { kindForPreset, kindLabel, makeStroke, presetFromPlayer, presetLabel } from './presets'
-import type { FormatId, Play, Player, Point, PresetId, Stroke, StrokeKind } from './types'
-import { FORMATS, isFormatId } from './types'
+import type { FormatId, Play, Player, Point, PresetId, Side, Stroke, StrokeKind } from './types'
+import { FORMATS, isFormatId, ourSideOf } from './types'
 
 export { canRedo, canUndo, commit, createHistory, redo, undo }
 export type { History }
@@ -28,8 +28,9 @@ export function createPlay(options: {
     formation: formation.name,
     formationId: formation.id,
     format: options.format,
-    los: 15,
+    los: 50,
     notes: '',
+    ourSide: 'offense',
     showDefense: false,
     players: offenseFor(options.format, formation.id),
     strokes: [],
@@ -146,25 +147,44 @@ export function applyPreset(play: Play, playerId: string, preset: PresetId): Pla
   return setStroke(play, makeStroke(uid(), playerId, preset, presetFromPlayer(preset, player, origin)))
 }
 
+export function isPlayerShown(play: Play, player: Player): boolean {
+  return player.side === ourSideOf(play) || play.showDefense
+}
+
 export function applyFormation(play: Play, format: FormatId, formationId: string): Play {
   const template = formationById(format, formationId)
-  const offense = offenseFor(format, template.id)
-  const players = play.showDefense ? [...offense, ...defenseFor(format)] : offense
+  const ourSide = ourSideOf(play)
+  const offense = offenseFor(format, template.id, ourSide === 'offense', 0)
+  const defense = defenseFor(format, ourSide === 'defense', 6)
+  const players =
+    ourSide === 'defense'
+      ? [...defense, ...(play.showDefense ? offense : [])]
+      : [...offense, ...(play.showDefense ? defense : [])]
   return {
     ...play,
     format,
     formation: template.name,
     formationId: template.id,
+    ourSide,
     players,
     strokes: [],
   }
 }
 
+export function setOurSide(play: Play, ourSide: Side): Play {
+  if (ourSideOf(play) === ourSide) return { ...play, ourSide }
+  return applyFormation({ ...play, ourSide, showDefense: true }, play.format, play.formationId)
+}
+
 export function setShowDefense(play: Play, show: boolean): Play {
   if (!show) return { ...play, showDefense: false }
-  const hasDefense = play.players.some((player) => player.side === 'defense')
-  if (hasDefense) return { ...play, showDefense: true }
-  return { ...play, showDefense: true, players: [...play.players, ...defenseFor(play.format)] }
+  const other: Side = ourSideOf(play) === 'offense' ? 'defense' : 'offense'
+  if (play.players.some((player) => player.side === other)) return { ...play, showDefense: true }
+  const extra =
+    other === 'defense'
+      ? defenseFor(play.format, false, 6)
+      : offenseFor(play.format, play.formationId, false, 0)
+  return { ...play, showDefense: true, players: [...play.players, ...extra] }
 }
 
 export function describeAssignment(player: Player, strokes: Stroke[]): string {
@@ -181,7 +201,7 @@ export function describeAssignment(player: Player, strokes: Stroke[]): string {
 
 export function assignmentRows(play: Play): { label: string; detail: string }[] {
   return play.players
-    .filter((player) => player.side === 'offense' || play.showDefense)
+    .filter((player) => isPlayerShown(play, player))
     .map((player) => ({ label: player.label, detail: describeAssignment(player, play.strokes) }))
 }
 
@@ -217,6 +237,7 @@ export function sanitizePlay(input: unknown): Play | null {
   const raw = input as Partial<Play>
   if (typeof raw.format !== 'string' || !isFormatId(raw.format)) return null
   if (!Array.isArray(raw.players) || raw.players.length === 0) return null
+  const ourSide = raw.ourSide === 'defense' ? 'defense' : 'offense'
   const players: Player[] = []
   for (const item of raw.players) {
     if (!item || typeof item !== 'object') return null
@@ -240,7 +261,9 @@ export function sanitizePlay(input: unknown): Play | null {
     ) {
       return null
     }
-    const shape = player.shape === 'diamond' || player.shape === 'square' || player.shape === 'circle' ? player.shape : 'circle'
+    const legacy = typeof player.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(player.color) ? player.color.toLowerCase() : ''
+    const storedRoute = typeof player.routeColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(player.routeColor) ? player.routeColor : ''
+    const routeColor = storedRoute || (legacy && legacy !== OUR_COLOR.toLowerCase() && legacy !== THEIR_COLOR.toLowerCase() ? legacy : routeColorAt(players.length))
     players.push({
       id: player.id,
       label: player.label.slice(0, 4),
@@ -248,8 +271,9 @@ export function sanitizePlay(input: unknown): Play | null {
       side: player.side,
       x: coords.x,
       y: coords.y,
-      color: typeof player.color === 'string' ? player.color : '#38bdf8',
-      shape,
+      color: player.side === ourSide ? OUR_COLOR : THEIR_COLOR,
+      routeColor,
+      shape: shapeFor(role),
       read: typeof player.read === 'number' && player.read >= 1 && player.read <= 5 ? Math.round(player.read) : null,
       note: typeof player.note === 'string' ? player.note.slice(0, 180) : '',
     })
@@ -286,8 +310,9 @@ export function sanitizePlay(input: unknown): Play | null {
     formation: typeof raw.formation === 'string' && raw.formation.trim() ? raw.formation.trim().slice(0, 40) : formationById(format, formationId).name,
     formationId,
     format,
-    los: typeof raw.los === 'number' ? Math.min(50, Math.max(1, Math.round(raw.los))) : 15,
+    los: typeof raw.los === 'number' ? Math.min(50, Math.max(1, Math.round(raw.los))) : 50,
     notes: typeof raw.notes === 'string' ? raw.notes.slice(0, 600) : '',
+    ourSide,
     showDefense: Boolean(raw.showDefense),
     players,
     strokes,

@@ -260,6 +260,44 @@ textarea { min-height: 96px; resize: vertical; }
 .stack-chip small { font-size: 12px; font-weight: 700; }
 .chips, .checks { display: flex; flex-wrap: wrap; gap: 8px; }
 .player-chip { display: inline-flex; align-items: center; gap: 8px; }
+.pos-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.pos {
+  min-height: 72px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #0c1322;
+  display: grid;
+  place-items: center;
+}
+.pos[aria-pressed='true'] {
+  border-color: transparent;
+  box-shadow: inset 0 0 0 2px var(--teal);
+}
+.mark {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  color: #102033;
+  font-family: var(--display);
+  font-size: 14px;
+  font-weight: 650;
+}
+.mark.ours { background: #f0c14a; }
+.mark.theirs { background: #d6f25a; }
+.mark.circle { border-radius: 50%; }
+.mark.square { border-radius: 5px; }
+.mark.diamond {
+  width: 32px;
+  height: 32px;
+  transform: rotate(45deg);
+  border-radius: 4px;
+}
+.mark.diamond > span { transform: rotate(-45deg); }
 
 .preset-grid {
   display: grid;

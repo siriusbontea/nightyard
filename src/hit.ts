@@ -1,4 +1,5 @@
 import { dist, distanceToStroke } from './geometry'
+import { isPlayerShown } from './play'
 import type { Play, Point } from './types'
 
 export type Hit =
@@ -17,7 +18,7 @@ export function hitTest(
   if (handle && !options.preferPlayers) return handle
   let nearestPlayer: { id: string; distance: number } | null = null
   for (const player of play.players) {
-    if (player.side === 'defense' && !play.showDefense) continue
+    if (!isPlayerShown(play, player)) continue
     const distance = dist(point, player)
     if (distance <= radii.player && (!nearestPlayer || distance < nearestPlayer.distance)) {
       nearestPlayer = { id: player.id, distance }
@@ -28,7 +29,7 @@ export function hitTest(
   let nearestStroke: { id: string; distance: number } | null = null
   for (const stroke of play.strokes) {
     const owner = play.players.find((player) => player.id === stroke.playerId)
-    if (!owner || (owner.side === 'defense' && !play.showDefense)) continue
+    if (!owner || !isPlayerShown(play, owner)) continue
     const distance = distanceToStroke(stroke, point)
     if (distance <= radii.stroke && (!nearestStroke || distance < nearestStroke.distance)) {
       nearestStroke = { id: stroke.id, distance }
