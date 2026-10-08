@@ -7,6 +7,7 @@ import { replaceStroke, setStroke, translatePlayer } from '../play'
 import { NIGHT } from '../theme'
 import type { Play, Point, Stroke, StrokeKind } from '../types'
 import { uid } from '../id'
+import { tapOpensPosition } from '../playerTap'
 
 interface FieldProps {
   play: Play
@@ -215,7 +216,9 @@ export function Field(props: FieldProps) {
         return
       }
       if (gesture.type === 'move') {
-        if (dist(gesture.origin, point) > 0.4) gesture.moved = true
+        const slop = Math.max(0.85, yardsFor(14))
+        if (dist(gesture.origin, point) <= slop) return
+        gesture.moved = true
         const x = clamp(gesture.start.x + (point.x - gesture.origin.x), 1.4, FIELD_WIDTH - 1.4)
         const y = clamp(gesture.start.y + (point.y - gesture.origin.y), -16, 27)
         gesture.latest = translatePlayer(gesture.snapshot, gesture.playerId, x, y)
@@ -274,7 +277,7 @@ export function Field(props: FieldProps) {
         if (!finished.moved || !finished.latest) {
           const already = current.selectedPlayerId === finished.playerId
           current.onSelect(finished.playerId, primaryStrokeId(finished.snapshot, finished.playerId))
-          if (already) current.onEditPlayer(finished.playerId)
+          if (tapOpensPosition(event.pointerType, already)) current.onEditPlayer(finished.playerId)
           paint(finished.snapshot, true, 0)
           return
         }

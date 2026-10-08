@@ -298,7 +298,7 @@ export function App() {
               <i style={{ background: selected.color }} />
               {selected.label}
             </span>
-            <span class="hint grow">Drag {selected.label} to move.</span>
+            <span class="hint grow">Drag to move. Tap to change.</span>
             <button type="button" class="text-btn" onClick={() => setSheet('player')}>
               Edit
             </button>
@@ -315,7 +315,7 @@ export function App() {
             </button>
           </div>
         ) : (
-          <p class="hint">{play.strokes.length === 0 ? 'Tap Draw, then drag from a player.' : 'Tap Play to watch.'}</p>
+          <p class="hint">Tap a player to change them.</p>
         )}
         <nav class="toolbar" aria-label="Tools">
           <button type="button" class="tool" onClick={() => setSheet('book')}>

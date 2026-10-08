@@ -1,5 +1,8 @@
 import { render } from 'preact'
 import { App } from './components/App'
+import { bindVisibleViewport } from './viewport'
+
+bindVisibleViewport()
 import '@fontsource/dm-sans/latin-400.css'
 import '@fontsource/dm-sans/latin-600.css'
 import '@fontsource/dm-sans/latin-700.css'
