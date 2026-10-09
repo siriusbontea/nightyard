@@ -26,6 +26,9 @@ export interface Theme {
 
 export const COLOR_TURF_A = '#2f9a4a'
 
+/** Bright orange sampled from the Dawgs lettering (most common letter pixel). */
+export const ACCENT = '#F9682D'
+
 export const NIGHT: Theme = {
   id: 'night',
   turf: ['#1b6b3c', '#165a33'],
@@ -34,21 +37,21 @@ export const NIGHT: Theme = {
   lineSoft: 'rgba(255,255,255,0.55)',
   number: '#f7fafc',
   numberStroke: '#0c3320',
-  los: '#2ee6c8',
+  los: '#ffffff',
   losGlow: true,
   grain: true,
   vignette: '#02140c',
   outlineOnly: false,
   routeOutline: '#07140e',
   label: '#f8fafc',
-  badgeFill: '#071018',
-  badgeStroke: '#2ee6c8',
-  badgeText: '#f8fafc',
+  badgeFill: '#141414',
+  badgeStroke: '#ffffff',
+  badgeText: '#ffffff',
   ballFill: '#6b3a1f',
   ballStroke: '#f3e6c8',
-  page: '#0b1220',
-  title: '#f8fafc',
-  muted: '#93a0b8',
+  page: '#0E0E10',
+  title: '#ffffff',
+  muted: '#A8A8A8',
   interactive: true,
 }
 

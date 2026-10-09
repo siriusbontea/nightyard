@@ -8,6 +8,7 @@ import '@fontsource/dm-sans/latin-600.css'
 import '@fontsource/dm-sans/latin-700.css'
 import '@fontsource/oswald/latin-500.css'
 import '@fontsource/oswald/latin-600.css'
+import '@fontsource/graduate/latin-400.css'
 import './styles.css'
 
 const root = document.getElementById('app')

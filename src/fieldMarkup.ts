@@ -2,7 +2,7 @@ import { ballMarkup } from './ball'
 import { END_ZONE_DEPTH, FIELD_LENGTH, HASH_INSET, displayedYard, fieldYAt, numberArrow } from './fieldMarks'
 import { FIELD_WIDTH, PLAYER_R, fieldToSvg, segmentTangent, viewSize, type Camera } from './geometry'
 import { isPlayerShown } from './play'
-import type { Theme } from './theme'
+import { ACCENT, type Theme } from './theme'
 import { ourSideOf, type Play, type Player, type Point, type Stroke } from './types'
 
 export function escapeXml(value: string): string {
@@ -88,7 +88,8 @@ function handlesMarkup(stroke: Stroke, camera: Camera): string {
   for (let i = 1; i < stroke.points.length; i++) {
     const point = fieldToSvg(stroke.points[i], camera)
     parts.push(
-      `<circle cx="${point.x.toFixed(1)}" cy="${point.y.toFixed(1)}" r="7.5" fill="#ffffff" stroke="#2ee6c8" stroke-width="2.4"/>`,
+      `<circle cx="${point.x.toFixed(1)}" cy="${point.y.toFixed(1)}" r="7.5" fill="#ffffff" stroke="#140E0C" stroke-width="4.4"/>
+      <circle cx="${point.x.toFixed(1)}" cy="${point.y.toFixed(1)}" r="7.5" fill="none" stroke="${ACCENT}" stroke-width="2.2"/>`,
     )
   }
   for (let i = 0; i < stroke.points.length - 1; i++) {
@@ -96,14 +97,15 @@ function handlesMarkup(stroke: Stroke, camera: Camera): string {
     if (curve) {
       const point = fieldToSvg(curve, camera)
       parts.push(
-        `<rect x="${(point.x - 5.5).toFixed(1)}" y="${(point.y - 5.5).toFixed(1)}" width="11" height="11" fill="#2ee6c8" stroke="#062018" stroke-width="1.4" transform="rotate(45 ${point.x.toFixed(1)} ${point.y.toFixed(1)})"/>`,
+        `<rect x="${(point.x - 5.5).toFixed(1)}" y="${(point.y - 5.5).toFixed(1)}" width="11" height="11" fill="${ACCENT}" stroke="#140E0C" stroke-width="1.8" transform="rotate(45 ${point.x.toFixed(1)} ${point.y.toFixed(1)})"/>`,
       )
     } else {
       const a = stroke.points[i]
       const b = stroke.points[i + 1]
       const mid = fieldToSvg({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, camera)
       parts.push(
-        `<circle cx="${mid.x.toFixed(1)}" cy="${mid.y.toFixed(1)}" r="5.5" fill="none" stroke="#2ee6c8" stroke-width="2"/>`,
+        `<circle cx="${mid.x.toFixed(1)}" cy="${mid.y.toFixed(1)}" r="5.5" fill="none" stroke="#140E0C" stroke-width="4"/>
+        <circle cx="${mid.x.toFixed(1)}" cy="${mid.y.toFixed(1)}" r="5.5" fill="none" stroke="${ACCENT}" stroke-width="2"/>`,
       )
     }
   }
@@ -155,7 +157,9 @@ function playerMarkup(player: Player, play: Play, camera: Camera, theme: Theme, 
     const dx = radius * 0.92
     shape = `<polygon points="0,${-dy.toFixed(2)} ${dx.toFixed(2)},0 0,${(dy * 0.92).toFixed(2)} ${(-dx).toFixed(2)},0" fill="${fill}" stroke="${stroke}" stroke-width="${sw}"/>`
   }
-  const ring = selected && theme.interactive ? `<circle r="${(radius + 5).toFixed(1)}" fill="none" stroke="#2ee6c8" stroke-width="2.5"/>` : ''
+  const ring = selected && theme.interactive
+    ? `<circle r="${(radius + 5).toFixed(1)}" fill="none" stroke="#140E0C" stroke-width="6"/><circle r="${(radius + 5).toFixed(1)}" fill="none" stroke="${ACCENT}" stroke-width="2.6"/>`
+    : ''
   const size = labelFontSize(player.label, radius, player.shape)
   const label = `<text x="0" y="0" fill="${labelInk(fill)}" font-family="Oswald, Impact, sans-serif" font-size="${size.toFixed(1)}" font-weight="600" text-anchor="middle" dominant-baseline="central">${escapeXml(player.label)}</text>`
   let badge = ''

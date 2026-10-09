@@ -73,7 +73,7 @@ export function renderExportSvg(play: Play, style: ExportStyle, options: ExportO
   for (const line of titleLines) {
     y += 44
     parts.push(
-      `<text x="${margin}" y="${y}" fill="${theme.title}" font-family="Oswald, Impact, sans-serif" font-size="40" font-weight="600">${escapeText(line)}</text>`,
+      `<text x="${margin}" y="${y}" fill="${theme.title}" font-family="Graduate, Impact, sans-serif" font-size="40" font-weight="400" letter-spacing="1">${escapeText(line)}</text>`,
     )
   }
   y += 28
@@ -88,7 +88,7 @@ export function renderExportSvg(play: Play, style: ExportStyle, options: ExportO
   let textY = fieldY + fieldH + 36
   if (notes.length) {
     parts.push(
-      `<text x="${margin}" y="${textY}" fill="${theme.title}" font-family="Oswald, Impact, sans-serif" font-size="16" letter-spacing="1.5">NOTES</text>`,
+      `<text x="${margin}" y="${textY}" fill="${theme.title}" font-family="Graduate, Impact, sans-serif" font-size="18" letter-spacing="1">NOTES</text>`,
     )
     textY += 26
     for (const line of notes) {
@@ -101,7 +101,7 @@ export function renderExportSvg(play: Play, style: ExportStyle, options: ExportO
   }
   if (rows.length) {
     parts.push(
-      `<text x="${margin}" y="${textY}" fill="${theme.title}" font-family="Oswald, Impact, sans-serif" font-size="16" letter-spacing="1.5">ASSIGNMENTS</text>`,
+      `<text x="${margin}" y="${textY}" fill="${theme.title}" font-family="Graduate, Impact, sans-serif" font-size="18" letter-spacing="1">ASSIGNMENTS</text>`,
     )
     textY += 28
     for (const row of rows) {
@@ -112,7 +112,7 @@ export function renderExportSvg(play: Play, style: ExportStyle, options: ExportO
     }
   }
   parts.push(
-    `<text x="${margin}" y="${EXPORT_H - 40}" fill="${theme.muted}" font-family="Oswald, Impact, sans-serif" font-size="14" letter-spacing="1.4">NIGHT YARD · SIRIUS BONTEA</text>`,
+    `<text x="${margin}" y="${EXPORT_H - 40}" fill="${theme.muted}" font-family="Graduate, Impact, sans-serif" font-size="16" letter-spacing="1">NIGHT YARD · SIRIUS BONTEA</text>`,
   )
   parts.push('</svg>')
   return parts.join('')
