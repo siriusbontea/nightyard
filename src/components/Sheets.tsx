@@ -8,7 +8,12 @@ import type { Play, Player, PresetId } from '../types'
 import { FORMATS, formatShort, formatStyle, ourSideOf, type FormatId } from '../types'
 import { PathPreview } from './PathPreview'
 
-export function Sheet(props: { title: string; onClose: () => void; children: ComponentChildren }) {
+export function Sheet(props: {
+  title: string
+  subtitle?: string
+  onClose: () => void
+  children: ComponentChildren
+}) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') props.onClose()
@@ -28,7 +33,10 @@ export function Sheet(props: { title: string; onClose: () => void; children: Com
       >
         <div class="grab" />
         <div class="sheet-head">
-          <h2>{props.title}</h2>
+          <div class="sheet-titles">
+            <h2>{props.title}</h2>
+            {props.subtitle ? <p class="sheet-sub">{props.subtitle}</p> : null}
+          </div>
           <button type="button" class="icon-btn" aria-label="Close" onClick={props.onClose}>
             <CloseIcon />
           </button>
@@ -394,18 +402,20 @@ export function ExportSheet(props: {
         </button>
       </div>
       <button type="button" class="primary wide" disabled={props.busy} onClick={() => props.onPng('print')}>
-        Save white picture
+        Download white picture
       </button>
       <button type="button" class="primary wide ghost" disabled={props.busy} onClick={() => props.onPng('color')}>
-        Save color picture
+        Download color picture
       </button>
       <p class="fine">Pictures are letter size. White is for printing. Color looks like the field.</p>
-      <button type="button" class="row-btn" onClick={props.onJsonPlay}>
-        Save this play
+      <p class="backup-label">Backup files</p>
+      <button type="button" class="primary wide ghost" onClick={props.onJsonPlay}>
+        Download this play (file)
       </button>
-      <button type="button" class="row-btn" onClick={props.onJsonBook}>
-        Save all plays
+      <button type="button" class="primary wide ghost" onClick={props.onJsonBook}>
+        Download all plays (file)
       </button>
+      <p class="fine">Your plays already save to your account. These make a file on this phone.</p>
     </Sheet>
   )
 }

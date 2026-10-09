@@ -65,7 +65,7 @@ export function SavedPlaysSheet(props: {
   const search = mode !== 'signed-out' && showsSavedSearch(plays.length)
 
   return (
-    <Sheet title="Saved plays" onClose={props.onClose}>
+    <Sheet title="Your saved plays" subtitle="Saved to your account" onClose={props.onClose}>
       <div class="saved-sheet">
         <div class="saved-scroll">
           {mode === 'signed-out' ? <p class="welcome-copy">Sign in to see your saved plays</p> : null}

@@ -22,6 +22,9 @@ export function PlaybookList(props: {
   onDelete: (id: string) => void
   onCreate: () => void
   onImport: () => void
+  saveStatus?: string
+  saveKind?: string
+  onSaveStatus?: () => void
 }) {
   const [renaming, setRenaming] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
@@ -71,6 +74,15 @@ export function PlaybookList(props: {
                     </span>
                   </button>
                 )}
+                {current && props.saveStatus ? (
+                  props.onSaveStatus ? (
+                    <button type="button" class={`save-chip ${props.saveKind ?? ''} play-save`} onClick={props.onSaveStatus}>
+                      {props.saveStatus}
+                    </button>
+                  ) : (
+                    <p class={`save-chip static ${props.saveKind ?? ''} play-save`}>{props.saveStatus}</p>
+                  )
+                ) : null}
                 <div class="row-actions">
                   <button
                     type="button"

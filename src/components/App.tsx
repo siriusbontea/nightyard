@@ -21,6 +21,29 @@ type SheetId = null | 'book' | 'presets' | 'player' | 'more' | 'export' | 'play'
 const SPEEDS = [0.5, 1, 1.5] as const
 const SPEED_WORD: Record<(typeof SPEEDS)[number], string> = { 0.5: 'Slow', 1: 'Normal', 1.5: 'Fast' }
 const DRAW_WORD: Record<StrokeKind, string> = { route: 'Line', motion: 'Walk', block: 'Block', run: 'Run' }
+const SAVE_EXPLAINER = 'Your plays save by themselves. Open them on any device by signing in.'
+
+function SaveChip(props: {
+  label: string
+  kind: string
+  onGuest: () => void
+  onExplain: () => void
+}) {
+  if (!props.label) return null
+  if (props.kind === 'guest') {
+    return (
+      <button type="button" class="save-chip guest" onClick={props.onGuest}>
+        {props.label}
+      </button>
+    )
+  }
+  if (props.kind === 'local') return <p class="save-chip static">{props.label}</p>
+  return (
+    <button type="button" class={`save-chip ${props.kind}`} aria-live="polite" onClick={props.onExplain}>
+      {props.label}
+    </button>
+  )
+}
 
 /** Guess the field frame before it is measured so the first paint is already full. */
 function openingCamera(los = DEFAULT_LOS) {
@@ -280,6 +303,15 @@ export function App() {
           onDelete={book.remove}
           onCreate={() => startNew()}
           onImport={() => setSavedOpen(true)}
+          saveStatus={book.syncStatus}
+          saveKind={book.saveKind}
+          onSaveStatus={
+            book.saveKind === 'guest'
+              ? () => openAccount('up')
+              : book.saveKind === 'local' || book.saveKind === 'none'
+                ? undefined
+                : () => book.notify(SAVE_EXPLAINER)
+          }
         />
       </aside>
       <div class="stage">
@@ -312,11 +344,12 @@ export function App() {
               Guest — make a free account to save
             </button>
           ) : null}
-          {book.syncStatus ? (
-            <p class="sync-line" aria-live="polite">
-              {book.syncStatus}
-            </p>
-          ) : null}
+          <SaveChip
+            label={book.syncStatus}
+            kind={book.saveKind}
+            onGuest={() => openAccount('up')}
+            onExplain={() => book.notify(SAVE_EXPLAINER)}
+          />
         </header>
         <div class="field-wrap">
           <div class="field-frame">
@@ -451,6 +484,15 @@ export function App() {
             onDelete={book.remove}
             onCreate={() => startNew()}
             onImport={() => setSavedOpen(true)}
+            saveStatus={book.syncStatus}
+            saveKind={book.saveKind}
+            onSaveStatus={
+              book.saveKind === 'guest'
+                ? () => openAccount('up')
+                : book.saveKind === 'local' || book.saveKind === 'none'
+                  ? undefined
+                  : () => book.notify(SAVE_EXPLAINER)
+            }
           />
         </Sheet>
       ) : null}

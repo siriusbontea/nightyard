@@ -10,13 +10,31 @@ import {
   forgetDelete,
   getSyncState,
   rememberDelete,
+  saveChip,
   scheduleSync,
   setFreshSeed,
-  statusLine,
   subscribeSync,
   type SyncState,
 } from './sync'
 import type { FormatId, Play } from './types'
+
+const AUTOSAVE_TIP = 'night-yard-autosave-tip'
+
+function autosaveTipSeen(): boolean {
+  try {
+    return localStorage.getItem(AUTOSAVE_TIP) === '1'
+  } catch {
+    return false
+  }
+}
+
+function markAutosaveTip() {
+  try {
+    localStorage.setItem(AUTOSAVE_TIP, '1')
+  } catch {
+    /* private mode */
+  }
+}
 
 function samePlay(a: Play, b: Play): boolean {
   return JSON.stringify(a) === JSON.stringify(b)
@@ -49,6 +67,7 @@ export function usePlaybook() {
   const [memoryOnly, setMemoryOnly] = useState(false)
   const [guest, setGuest] = useState(false)
   const [account, setAccount] = useState<SyncState>(getSyncState())
+  const [online, setOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine))
   const deletedRef = useRef<Play | null>(null)
   const playsRef = useRef(plays)
   const historyRef = useRef(history)
@@ -56,6 +75,7 @@ export function usePlaybook() {
   const guestRef = useRef(false)
   const bookNameRef = useRef(bookName)
   const signedRef = useRef(getSyncState().signedIn)
+  const tipped = useRef(autosaveTipSeen())
   playsRef.current = plays
   historyRef.current = history
   memoryOnlyRef.current = memoryOnly
@@ -70,6 +90,24 @@ export function usePlaybook() {
     setToast(message)
     setToastUndo(() => undo ?? null)
   }
+
+  function maybeAutosaveTip() {
+    if (tipped.current || guestRef.current || !getSyncState().signedIn) return
+    tipped.current = true
+    markAutosaveTip()
+    notify('Plays save to your account automatically.')
+  }
+
+  useEffect(() => {
+    const on = () => setOnline(true)
+    const off = () => setOnline(false)
+    window.addEventListener('online', on)
+    window.addEventListener('offline', off)
+    return () => {
+      window.removeEventListener('online', on)
+      window.removeEventListener('offline', off)
+    }
+  }, [])
 
   function publish(next: History) {
     historyRef.current = next
@@ -210,6 +248,7 @@ export function usePlaybook() {
     const current = historyRef.current
     if (!current) return
     publish(commit(current, next))
+    maybeAutosaveTip()
   }
 
   function open(id: string) {
@@ -226,11 +265,20 @@ export function usePlaybook() {
       formationId: format === '11v11' ? 'shotgun-trips' : undefined,
       name: nextName(playsRef.current),
     })
-    if (keepsLocal()) await savePlay(created).then(() => setSaved(true)).catch(() => setToast('Could not save on this phone.'))
+    let failed = false
+    if (keepsLocal()) {
+      await savePlay(created)
+        .then(() => setSaved(true))
+        .catch(() => {
+          failed = true
+          setToast('Could not save on this phone.')
+        })
+    }
     setPlays([created, ...playsRef.current])
     const next = createHistory(created)
     historyRef.current = next
     setHistory(next)
+    if (!failed) maybeAutosaveTip()
   }
 
   async function rename(id: string, name: string) {
@@ -254,6 +302,7 @@ export function usePlaybook() {
     historyRef.current = next
     setHistory(next)
     notify('Made a copy')
+    maybeAutosaveTip()
   }
 
   async function remove(id: string) {
@@ -375,12 +424,14 @@ export function usePlaybook() {
     const current = historyRef.current
     if (!current || !canUndo(current)) return
     publish(stampHistory(undo(current)))
+    maybeAutosaveTip()
   }
 
   function doRedo() {
     const current = historyRef.current
     if (!current || !canRedo(current)) return
     publish(stampHistory(redo(current)))
+    maybeAutosaveTip()
   }
 
   return {
@@ -393,7 +444,8 @@ export function usePlaybook() {
     saved,
     accountName: account.username,
     guest,
-    syncStatus: guest ? '' : statusLine(saved, account),
+    syncStatus: saveChip(saved, account, online, guest).label,
+    saveKind: saveChip(saved, account, online, guest).kind,
     notify,
     canUndo: history ? canUndo(history) : false,
     canRedo: history ? canRedo(history) : false,

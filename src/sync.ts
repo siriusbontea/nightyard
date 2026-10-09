@@ -36,11 +36,29 @@ export function getSyncState(): SyncState {
   return { signedIn: Boolean(username), username, phase: username ? phase : 'local' }
 }
 
-/** Signed out: "Saved" once the phone write finishes. Signed in: pending until the server catches up. */
-export function statusLine(saved: boolean, state: SyncState): string {
-  if (!state.signedIn) return saved ? 'Saved' : ''
-  if (state.phase === 'synced') return 'Synced'
-  return 'Saved on this phone, will sync'
+export type SaveKind = 'account' | 'saving' | 'phone' | 'guest' | 'local' | 'none'
+
+function onlineDefault(): boolean {
+  return typeof navigator === 'undefined' ? true : navigator.onLine
+}
+
+/** What the chip next to the play title should say. */
+export function saveChip(
+  saved: boolean,
+  state: SyncState,
+  online = onlineDefault(),
+  guest = false,
+): { label: string; kind: SaveKind } {
+  if (guest) return { label: 'Not saved — make a free account', kind: 'guest' }
+  if (!state.signedIn) return saved ? { label: 'Saved', kind: 'local' } : { label: '', kind: 'none' }
+  if (state.phase === 'synced') return { label: '✓ Saved to your account', kind: 'account' }
+  if (!online) return { label: 'Saved on this phone — will sync', kind: 'phone' }
+  return { label: 'Saving…', kind: 'saving' }
+}
+
+/** Signed out: "Saved" once the phone write finishes. Signed in: the account chip. */
+export function statusLine(saved: boolean, state: SyncState, online = onlineDefault()): string {
+  return saveChip(saved, state, online).label
 }
 
 function publish() {
