@@ -1,5 +1,6 @@
-import { OUR_COLOR, THEIR_COLOR, defenseFor, formationById, offenseFor, routeColorAt, shapeFor } from './formations'
-import { pointOnStroke } from './geometry'
+import { HASH_INSET } from './fieldMarks'
+import { OUR_COLOR, THEIR_COLOR, defenseFor, formationById, offenseFor, playerFromSpot, routeColorAt, shapeFor, type Spot } from './formations'
+import { FIELD_WIDTH, pointOnStroke } from './geometry'
 import { canRedo, canUndo, commit, createHistory, redo, undo, type History } from './history'
 import { uid } from './id'
 import { playerAtTime } from './playback'
@@ -64,25 +65,115 @@ export function resetPlay(play: Play): Play {
   }
 }
 
-export function showcasePlay(): Play {
-  const play = createPlay({ format: '11v11', formationId: 'shotgun-trips', name: 'Stick' })
-  play.notes = 'X stops on the hitch. Y takes the corner if the corner bails. Z runs the go. The back flares to the flat.'
+function lined(spots: Spot[], side: Side, mine: boolean, routeStart: number): Player[] {
+  return spots.map((item, index) => playerFromSpot(item, side, mine, routeStart + index))
+}
+
+function drawn(playerId: string, kind: StrokeKind, preset: PresetId | null, points: Point[], curveAt?: Point): Stroke {
+  return {
+    id: uid(),
+    playerId,
+    kind,
+    points,
+    curves: points.slice(1).map((_, index) => (index === points.length - 2 ? (curveAt ?? null) : null)),
+    preset,
+  }
+}
+
+/** Goal-line bunch. Fresh books and New play start here. A book that already has plays is left alone. */
+export function corndogPlay(name = 'Corndog'): Play {
+  const ball = FIELD_WIDTH - HASH_INSET
+  const play = createPlay({ format: '11v11', formationId: 'trips-bunch', name })
+  play.los = 3
+  play.showDefense = true
+  play.notes = 'Outside man walks in, then cuts back to the pylon. Tight end bends to the corner. Back slips up for a shovel.'
+  const offense = lined(
+    [
+      { label: 'LT', role: 'ol', x: ball - 8.1, y: 0 },
+      { label: 'LG', role: 'ol', x: ball - 3.8, y: 0 },
+      { label: 'C', role: 'center', x: ball, y: -0.15 },
+      { label: 'RG', role: 'ol', x: ball + 3.6, y: 0 },
+      { label: 'RT', role: 'ol', x: ball + 6.4, y: 0 },
+      { label: 'Y', role: 'te', x: ball + 10.6, y: 0 },
+      { label: 'TE', role: 'te', x: ball + 12.4, y: 0.35 },
+      { label: 'X', role: 'wr', x: ball + 14.6, y: 0 },
+      { label: 'Z', role: 'wr', x: 6.4, y: 0 },
+      { label: 'QB', role: 'qb', x: ball, y: -5 },
+      { label: 'RB', role: 'rb', x: ball + 2.6, y: -4.8 },
+    ],
+    'offense',
+    true,
+    0,
+  )
+  const defense = lined(
+    [
+      { label: 'E', role: 'dl', x: ball - 7.2, y: 1.05 },
+      { label: 'N', role: 'dl', x: ball - 2.4, y: 1.05 },
+      { label: 'T', role: 'dl', x: ball + 2.2, y: 1.05 },
+      { label: 'J', role: 'dl', x: ball + 6.6, y: 1.05 },
+      { label: 'W', role: 'lb', x: ball - 10.4, y: 2.5 },
+      { label: 'M', role: 'lb', x: ball, y: 2.6 },
+      { label: '$', role: 'lb', x: ball + 5.4, y: 2.4 },
+      { label: 'LC', role: 'db', x: 6.4, y: 1.7 },
+      { label: 'SS', role: 'db', x: ball + 10.6, y: 1.8 },
+      { label: 'FS', role: 'db', x: ball + 4.2, y: 5.6 },
+      { label: 'RC', role: 'db', x: ball + 14.6, y: 1.75 },
+    ],
+    'defense',
+    false,
+    11,
+  )
+  play.players = [...offense, ...defense]
   const byLabel = Object.fromEntries(play.players.map((player) => [player.label, player]))
   byLabel.X.read = 1
   byLabel.Y.read = 2
-  byLabel.Z.read = 3
-  const strokes: Stroke[] = []
-  const add = (label: string, preset: PresetId, origin?: Point) => {
-    const player = byLabel[label]
-    strokes.push(makeStroke(uid(), player.id, preset, presetFromPlayer(preset, player, origin)))
-  }
-  add('X', 'hitch')
-  add('Y', 'corner')
-  add('Z', 'go')
-  add('RB', 'out')
-  play.strokes = strokes
+  byLabel.RB.read = 3
+  const x = byLabel.X
+  const y = byLabel.Y
+  const tight = byLabel.TE
+  const z = byLabel.Z
+  const back = byLabel.RB
+  const snapX = x.x - 4.1
+  play.strokes = [
+    drawn(x.id, 'motion', 'motion', [
+      { x: x.x, y: x.y },
+      { x: snapX, y: 0.15 },
+    ]),
+    drawn(x.id, 'route', null, [
+      { x: snapX, y: 0.15 },
+      { x: x.x - 0.4, y: 0.45 },
+      { x: Math.min(FIELD_WIDTH - 2.4, x.x + 2.6), y: 3.8 },
+    ]),
+    drawn(
+      y.id,
+      'route',
+      'corner',
+      [
+        { x: y.x, y: y.y },
+        { x: y.x + 0.3, y: 2.5 },
+        { x: y.x + 5.2, y: 6.3 },
+      ],
+      { x: y.x + 2.2, y: 5.1 },
+    ),
+    drawn(tight.id, 'block', 'block', [
+      { x: tight.x, y: tight.y },
+      { x: tight.x, y: 1.7 },
+    ]),
+    drawn(z.id, 'route', 'go', [
+      { x: z.x, y: z.y },
+      { x: z.x - 0.3, y: 5.8 },
+    ]),
+    drawn(back.id, 'run', 'run', [
+      { x: back.x, y: back.y },
+      { x: back.x + 2.2, y: -0.7 },
+    ]),
+  ]
   delete play.origin
   return rememberStart(play)
+}
+
+export function showcasePlay(): Play {
+  return corndogPlay()
 }
 
 export function duplicatePlay(play: Play): Play {

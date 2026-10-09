@@ -52,6 +52,20 @@ export function remoteRow(record: {
  * Newest `updatedAt` wins. A tie keeps the server row.
  * A newer local delete becomes a tombstone push. A newer server delete drops the local play.
  */
+/** A brand-new book should not be copied onto an account that already has plays. */
+export function withoutUntouchedSeed(
+  local: Play[],
+  remote: RemoteRow[],
+  seed: { id: string; updatedAt: number } | null,
+): Play[] {
+  if (!seed) return local
+  const remoteHasPlay = remote.some((row) => !row.deleted && row.play)
+  if (!remoteHasPlay) return local
+  const found = local.find((play) => play.id === seed.id)
+  if (!found || found.updatedAt !== seed.updatedAt) return local
+  return local.filter((play) => play.id !== seed.id)
+}
+
 export function planMerge(local: Play[], remote: RemoteRow[], tombstones: Tombstone[]): MergePlan {
   const byId = new Map<string, Play>()
   for (const play of local) byId.set(play.id, play)

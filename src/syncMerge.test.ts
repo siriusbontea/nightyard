@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { planMerge, remoteRow, type RemoteRow } from './syncMerge'
+import { planMerge, remoteRow, withoutUntouchedSeed, type RemoteRow } from './syncMerge'
 import type { Play } from './types'
 
 function play(id: string, updatedAt: number, name = id): Play {
@@ -73,6 +73,17 @@ describe('planMerge', () => {
     )
     expect(plan.plays.map((item) => item.id)).toEqual(['b', 'a', 'c'])
     expect(plan.plays[1]?.name).toBe('A2')
+  })
+})
+
+describe('withoutUntouchedSeed', () => {
+  it('drops a fresh starter when the account already has a play, and keeps an edited one', () => {
+    const seed = play('seed', 5, 'Corndog')
+    const remote = [row('kept', 9, false, 'Saved')]
+    expect(withoutUntouchedSeed([seed], remote, { id: 'seed', updatedAt: 5 }).map((item) => item.id)).toEqual([])
+    const edited = { ...seed, updatedAt: 12 }
+    expect(withoutUntouchedSeed([edited], remote, { id: 'seed', updatedAt: 5 }).map((item) => item.id)).toEqual(['seed'])
+    expect(withoutUntouchedSeed([seed], [], { id: 'seed', updatedAt: 5 }).map((item) => item.id)).toEqual(['seed'])
   })
 })
 

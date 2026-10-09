@@ -94,7 +94,7 @@ describe('player markers', () => {
     const camera = cameraForBox(width, height, 50)
     const { w, h } = viewSize(camera)
     expect(w / h).toBeCloseTo(width / height, 4)
-    const svg = fieldMarkup({ play: showcasePlay(), camera, theme: NIGHT })
+    const svg = fieldMarkup({ play: createPlay({ format: '11v11', formationId: 'shotgun-trips' }), camera, theme: NIGHT })
     const tags = [...svg.matchAll(/<text\b([^>]*)>(\d+)<\/text>/g)]
       .map((match) => ({ attrs: match[1], label: Number(match[2]) }))
       .filter((tag) => /rotate\(/.test(tag.attrs))
@@ -161,7 +161,7 @@ describe('player markers', () => {
       const losY = camera.ahead * camera.scale
       expect(losY).toBeGreaterThan(h * 0.2)
       expect(losY).toBeLessThan(h * 0.75)
-      const svg = fieldMarkup({ play: showcasePlay(), camera, theme: NIGHT })
+      const svg = fieldMarkup({ play: createPlay({ format: '11v11', formationId: 'shotgun-trips' }), camera, theme: NIGHT })
       const lines = [...svg.matchAll(/<line x1="0" y1="([\d.]+)" x2="([\d.]+)" y2="([\d.]+)"/g)]
         .filter((match) => Math.abs(Number(match[2]) - w) < 1)
         .map((match) => Number(match[1]))
@@ -183,8 +183,18 @@ describe('player markers', () => {
     }
   })
 
+  it('shows the far end zone when the snap is on the 3', () => {
+    const play = showcasePlay()
+    const camera = cameraForBox(402, 640, play.los)
+    const svg = fieldMarkup({ play, camera, theme: NIGHT })
+    expect(svg).toContain('data-endzone="far"')
+    expect(svg).toContain(END_ZONE_COLOR)
+    expect(camera.ahead).toBeGreaterThanOrEqual(play.los + 10)
+  })
+
   it('numbers a midfield snap up to the 50 and back down, and hides both end zones', () => {
-    const svg = fieldMarkup({ play: showcasePlay(), camera: EXPORT_CAMERA, theme: NIGHT })
+    const midfield = createPlay({ format: '11v11', formationId: 'shotgun-trips' })
+    const svg = fieldMarkup({ play: midfield, camera: EXPORT_CAMERA, theme: NIGHT })
     expect(svg.match(/>50</g)).toHaveLength(2)
     expect(svg.match(/>40</g)).toHaveLength(4)
     expect(svg.match(/>30</g)).toHaveLength(2)

@@ -182,6 +182,23 @@ const FORMATIONS: Record<FormatId, FormationTemplate[]> = {
   ],
   '11v11': [
     {
+      id: 'trips-bunch',
+      name: 'Trips Bunch',
+      spots: [
+        spot('LT', 'ol', 17.4, 0),
+        spot('LG', 'ol', 21.8, 0),
+        spot('C', 'center', C, -0.15),
+        spot('RG', 'ol', 31.5, 0),
+        spot('RT', 'ol', 35.8, 0),
+        spot('Y', 'te', 39.2, 0),
+        spot('TE', 'te', 41.2, 0.35),
+        spot('X', 'wr', 43.4, 0),
+        spot('Z', 'wr', 6.2, 0),
+        spot('QB', 'qb', C, -5),
+        spot('RB', 'rb', C + 2.4, -5.1),
+      ],
+    },
+    {
       id: 'shotgun-trips',
       name: 'Shotgun Trips',
       spots: [

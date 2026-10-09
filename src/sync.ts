@@ -1,5 +1,5 @@
 import { pb } from './pb'
-import { planMerge, remoteRow, type Tombstone } from './syncMerge'
+import { planMerge, remoteRow, withoutUntouchedSeed, type Tombstone } from './syncMerge'
 import { loadTombstones, saveTombstones } from './tombstones'
 import type { Play } from './types'
 
@@ -20,6 +20,7 @@ type Listener = (state: SyncState) => void
 
 let phase: SyncPhase = 'pending'
 let handlers: SyncHandlers | null = null
+let freshSeed: { id: string; updatedAt: number } | null = null
 let tail: Promise<void> = Promise.resolve()
 let timer = 0
 const listeners = new Set<Listener>()
@@ -45,6 +46,10 @@ export function statusLine(saved: boolean, state: SyncState): string {
 function publish() {
   const state = getSyncState()
   for (const listener of listeners) listener(state)
+}
+
+export function setFreshSeed(seed: { id: string; updatedAt: number } | null) {
+  freshSeed = seed
 }
 
 export function subscribeSync(listener: Listener): () => void {
@@ -99,9 +104,10 @@ async function runSync() {
   const bound = handlers
   if (!bound) return
   try {
-    const local = bound.getPlays()
     const records = await pb.collection('plays').getFullList({ requestKey: null })
     const remote = records.map((record) => remoteRow(record)).filter((row): row is NonNullable<typeof row> => !!row)
+    const local = withoutUntouchedSeed(bound.getPlays(), remote, freshSeed)
+    freshSeed = null
     const plan = planMerge(local, remote, loadTombstones())
     bound.applyPlays(plan.plays)
     saveTombstones(plan.keepTombstones)

@@ -62,7 +62,7 @@ describe('play model', () => {
     }
 
     const starter = showcasePlay()
-    const ballX = midfield
+    const ballX = FIELD_WIDTH - 20
     const center = starter.players.find((player) => player.role === 'center')!
     expect(Math.abs(center.x - ballX)).toBeLessThan(0.05)
     for (const stroke of starter.strokes) {
@@ -83,24 +83,36 @@ describe('play model', () => {
     expect(play.players.filter((player) => player.role === 'ol').every((player) => player.shape === 'square')).toBe(true)
   })
 
-  it('starts on 11v11 tackle at the 50 with routes that miss the yard numbers', () => {
+  it('starts on 11v11 tackle at the 3 with a bunch, a walk-in, and both teams', () => {
     const play = showcasePlay()
     expect(play.format).toBe('11v11')
-    expect(play.formationId).toBe('shotgun-trips')
-    expect(play.los).toBe(50)
+    expect(play.formationId).toBe('trips-bunch')
+    expect(play.formation).toBe('Trips Bunch')
+    expect(play.los).toBe(3)
     expect(play.ourSide).toBe('offense')
-    expect(play.name).toBe('Stick')
+    expect(play.showDefense).toBe(true)
+    expect(play.name).toBe('Corndog')
     expect(play.players.filter((player) => player.side === 'offense')).toHaveLength(11)
-    expect(play.players.every((player) => player.color === OUR_COLOR)).toBe(true)
-    expect(play.strokes.map((stroke) => stroke.preset).sort()).toEqual(['corner', 'go', 'hitch', 'out'])
+    expect(play.players.filter((player) => player.side === 'defense')).toHaveLength(11)
+    expect(play.players.filter((player) => player.side === 'offense').every((player) => player.color === OUR_COLOR)).toBe(true)
+    expect(play.players.filter((player) => player.side === 'defense').every((player) => player.color === THEIR_COLOR)).toBe(true)
+    const x = play.players.find((player) => player.label === 'X')!
+    expect(x.read).toBe(1)
+    expect(play.strokes.some((stroke) => stroke.playerId === x.id && stroke.kind === 'motion')).toBe(true)
+    expect(play.strokes.some((stroke) => stroke.preset === 'corner')).toBe(true)
     expect(play.strokes.some((stroke) => stroke.curves.some(Boolean))).toBe(true)
-    expect(play.players.find((player) => player.label === 'X')?.read).toBe(1)
+    const banned = /super bowl|chiefs|49ers|mahomes|hardman/i
+    expect(JSON.stringify(play)).not.toMatch(banned)
+    for (const player of play.players) {
+      expect(player.x, player.label).toBeGreaterThanOrEqual(PLAYER_R)
+      expect(player.x, player.label).toBeLessThanOrEqual(FIELD_WIDTH - PLAYER_R)
+    }
     const columns = [12, FIELD_WIDTH - 12]
     for (const stroke of play.strokes) {
       const samples = [...stroke.points, ...stroke.curves.filter((point): point is { x: number; y: number } => point !== null)]
       for (const point of samples) {
         for (const column of columns) {
-          expect(Math.abs(point.x - column), stroke.preset ?? '').toBeGreaterThan(2.2)
+          expect(Math.abs(point.x - column), stroke.preset ?? stroke.kind).toBeGreaterThan(2.2)
         }
       }
     }
@@ -109,7 +121,7 @@ describe('play model', () => {
   it('shows the path already on a player, and previews the same line the field draws', () => {
     const play = showcasePlay()
     const x = play.players.find((player) => player.label === 'X')!
-    expect(presetOnPlayer(play, x.id)).toBe('hitch')
+    expect(presetOnPlayer(play, x.id)).toBe('motion')
     const fresh = createPlay({ format: '11v11', formationId: 'shotgun-trips' })
     const y = fresh.players.find((player) => player.label === 'Y')!
     const withMotion = applyPreset(fresh, y.id, 'motion')
@@ -126,12 +138,14 @@ describe('play model', () => {
     const edited = translatePlayer({ ...start, los: 20, name: 'Moved' }, player.id, player.x + 3, player.y - 1)
     const restored = resetPlay(edited)
     expect(restored.id).toBe(start.id)
-    expect(restored.name).toBe('Stick')
+    expect(restored.name).toBe('Corndog')
     expect(restored.format).toBe('11v11')
-    expect(restored.los).toBe(50)
+    expect(restored.los).toBe(3)
     expect(restored.ourSide).toBe('offense')
-    expect(restored.players.every((item) => item.color === OUR_COLOR)).toBe(true)
-    expect(restored.strokes.map((stroke) => stroke.preset).sort()).toEqual(['corner', 'go', 'hitch', 'out'])
+    expect(restored.players.filter((item) => item.side === 'offense').every((item) => item.color === OUR_COLOR)).toBe(true)
+    expect(restored.players.filter((item) => item.side === 'defense').every((item) => item.color === THEIR_COLOR)).toBe(true)
+    expect(restored.strokes.some((stroke) => stroke.kind === 'motion')).toBe(true)
+    expect(restored.strokes.some((stroke) => stroke.preset === 'corner')).toBe(true)
     expect(restored.players.find((item) => item.label === 'X')?.x).toBeCloseTo(player.x)
     const other = createPlay({ format: '5v5', formationId: 'doubles', name: 'Flag mesh' })
     const book = [restored, other]
@@ -185,7 +199,7 @@ describe('play model', () => {
     expect(offenseCount(eleven)).toBe(11)
     expect(eleven.strokes).toHaveLength(0)
     expect(eleven.formation).toBe('Shotgun Trips')
-    expect(eleven.los).toBe(50)
+    expect(eleven.los).toBe(3)
     const onTheTwenty = applyFormation({ ...play, los: 25 }, '5v5', 'doubles')
     expect(onTheTwenty.los).toBe(25)
     expect(setOurSide(onTheTwenty, 'defense').los).toBe(25)
@@ -219,7 +233,7 @@ describe('play model', () => {
     expect(describeAssignment(z, play.strokes)).toMatch(/go/i)
     const noted = { ...z, note: 'Sit if the flat is taken' }
     expect(describeAssignment(noted, play.strokes)).toContain('Sit if the flat is taken')
-    expect(assignmentRows(play).some((row) => row.label === 'X' && /hitch/i.test(row.detail))).toBe(true)
+    expect(assignmentRows(play).some((row) => row.label === 'X' && /motion/i.test(row.detail))).toBe(true)
   })
 
   it('keeps a saved line and puts a missing line on the 50', () => {
