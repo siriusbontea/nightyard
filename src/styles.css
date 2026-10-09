@@ -412,6 +412,18 @@ textarea { min-height: 96px; resize: vertical; }
 .field-label { display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: var(--muted); font-weight: 650; }
 .fine, .empty-copy { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.45; }
 
+.book-actions {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.book-actions .primary {
+  flex: 1 1 0;
+  min-height: 56px;
+  padding: 8px 10px;
+  line-height: 1.15;
+  white-space: normal;
+}
 .book-list ul { list-style: none; margin: 8px 0 0; padding: 0; }
 .play-row { border-bottom: 1px solid var(--line); padding: 4px 0 8px; }
 .play-row.current .play-name { color: var(--teal); }

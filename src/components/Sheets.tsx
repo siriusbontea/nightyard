@@ -381,7 +381,6 @@ export function ExportSheet(props: {
   onPng: (style: 'print' | 'color') => void
   onJsonPlay: () => void
   onJsonBook: () => void
-  onImport: () => void
   onClose: () => void
 }) {
   return (
@@ -406,9 +405,6 @@ export function ExportSheet(props: {
       </button>
       <button type="button" class="row-btn" onClick={props.onJsonBook}>
         Save all plays
-      </button>
-      <button type="button" class="row-btn" onClick={props.onImport}>
-        Open a file
       </button>
     </Sheet>
   )

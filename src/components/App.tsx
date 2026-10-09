@@ -155,7 +155,7 @@ export function App() {
           New play
         </button>
         <button type="button" class="primary ghost" onClick={() => fileRef.current?.click()}>
-          Open a file
+          Open a saved play
         </button>
         <input
           ref={fileRef}
@@ -201,6 +201,7 @@ export function App() {
           onDuplicate={book.duplicate}
           onDelete={book.remove}
           onCreate={() => startNew()}
+          onImport={() => fileRef.current?.click()}
         />
       </aside>
       <div class="stage">
@@ -359,6 +360,7 @@ export function App() {
             }}
             onDelete={book.remove}
             onCreate={() => startNew()}
+            onImport={() => fileRef.current?.click()}
           />
         </Sheet>
       ) : null}
@@ -448,7 +450,6 @@ export function App() {
             downloadText(`${slug(book.bookName)}.json`, serializePlaybook(book.bookName, book.plays))
             book.notify('All plays saved')
           }}
-          onImport={() => fileRef.current?.click()}
           onClose={() => setSheet(null)}
         />
       ) : null}

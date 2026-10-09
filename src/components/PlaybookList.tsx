@@ -21,15 +21,21 @@ export function PlaybookList(props: {
   onDuplicate: (id: string) => void
   onDelete: (id: string) => void
   onCreate: () => void
+  onImport: () => void
 }) {
   const [renaming, setRenaming] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
 
   return (
     <div class="book-list">
-      <button type="button" class="primary wide" onClick={props.onCreate}>
-        New play
-      </button>
+      <div class="book-actions">
+        <button type="button" class="primary" onClick={props.onCreate}>
+          New play
+        </button>
+        <button type="button" class="primary ghost" onClick={props.onImport}>
+          Open a saved play
+        </button>
+      </div>
       {props.plays.length === 0 ? (
         <p class="empty-copy">No plays yet. Tap New play.</p>
       ) : (
