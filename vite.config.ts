@@ -33,7 +33,7 @@ export default defineConfig(({ command }) => {
               ],
             },
             workbox: {
-              globPatterns: ['**/*.{js,css,html,svg,png,woff2,webmanifest,ico}'],
+              globPatterns: ['**/*.{js,css,html,svg,png,webp,woff2,webmanifest,ico}'],
               navigateFallback: 'index.html',
               navigateFallbackAllowlist: [navigationAllowlist(base)],
               cleanupOutdatedCaches: true,

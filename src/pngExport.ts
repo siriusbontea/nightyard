@@ -2,6 +2,7 @@ import dmRegularUrl from '@fontsource/dm-sans/files/dm-sans-latin-400-normal.wof
 import dmBoldUrl from '@fontsource/dm-sans/files/dm-sans-latin-700-normal.woff2?url'
 import oswaldUrl from '@fontsource/oswald/files/oswald-latin-600-normal.woff2?url'
 import graduateUrl from '@fontsource/graduate/files/graduate-latin-400-normal.woff2?url'
+import { END_ZONE_COLOR, END_ZONE_LINE } from './endZoneArt'
 import { EXPORT_H, EXPORT_W, renderExportSvg, type ExportStyle } from './exportSvg'
 import type { Play } from './types'
 
@@ -37,6 +38,20 @@ async function fontCss(): Promise<string> {
   return fontCssPromise
 }
 
+async function inlineEndZoneArt(svg: string): Promise<string> {
+  let next = svg
+  for (const url of [END_ZONE_COLOR, END_ZONE_LINE]) {
+    if (!next.includes(url)) continue
+    const buffer = await fetch(url).then((response) => {
+      if (!response.ok) throw new Error('Could not load the end zone art.')
+      return response.arrayBuffer()
+    })
+    const mime = url.endsWith('.webp') ? 'image/webp' : 'image/png'
+    next = next.split(url).join(`data:${mime};base64,${toBase64(buffer)}`)
+  }
+  return next
+}
+
 export async function renderPng(
   play: Play,
   style: ExportStyle,
@@ -48,7 +63,7 @@ export async function renderPng(
   } catch {
     css = ''
   }
-  const svg = renderExportSvg(play, style, { ...options, fontCss: css })
+  const svg = await inlineEndZoneArt(renderExportSvg(play, style, { ...options, fontCss: css }))
   const blob = new Blob([svg], { type: 'image/svg+xml;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   try {

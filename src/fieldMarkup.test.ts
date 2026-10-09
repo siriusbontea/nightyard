@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { END_ZONE_COLOR, END_ZONE_LINE } from './endZoneArt'
 import { fieldMarkup, labelFontSize, labelInk } from './fieldMarkup'
 import { OUR_COLOR, THEIR_COLOR, defenseFor } from './formations'
 import { EXPORT_CAMERA, FIELD_WIDTH, PLAYER_R, cameraForBox, viewSize } from './geometry'
@@ -194,7 +195,29 @@ describe('player markers', () => {
     close.los = 10
     const redZone = fieldMarkup({ play: close, camera: EXPORT_CAMERA, theme: NIGHT })
     expect(redZone).toContain(NIGHT.endZone)
+    expect(redZone).toContain(END_ZONE_COLOR)
+    expect(redZone).toContain('data-endzone="far"')
+    expect(redZone).not.toContain(END_ZONE_LINE)
+    expect(svg).not.toContain(END_ZONE_COLOR)
+    const printedZone = fieldMarkup({ play: close, camera: EXPORT_CAMERA, theme: PRINT })
+    expect(printedZone).toContain(END_ZONE_LINE)
+    expect(printedZone).not.toContain(END_ZONE_COLOR)
     expect(redZone).not.toContain('data-arrow="down"')
+  })
+
+  it('paints both end zones under the lines, each facing the field', () => {
+    const play = createPlay({ format: '5v5', formationId: 'doubles' })
+    play.los = 10
+    const svg = fieldMarkup({ play, camera: { ahead: 20, behind: 110, scale: 10 }, theme: NIGHT })
+    const far = svg.indexOf('data-endzone="far"')
+    const near = svg.indexOf('data-endzone="near"')
+    const line = svg.indexOf('<line ')
+    expect(far).toBeGreaterThan(-1)
+    expect(near).toBeGreaterThan(-1)
+    expect(svg.slice(near, near + 180)).toContain('rotate(180')
+    expect(svg.slice(far, far + 80)).not.toContain('rotate(180')
+    expect(far).toBeLessThan(line)
+    expect(near).toBeLessThan(line)
   })
 
   it('uses team colors on a defense play and keeps path colors different', () => {

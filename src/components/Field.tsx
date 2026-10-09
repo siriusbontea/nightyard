@@ -78,6 +78,13 @@ export function Field(props: FieldProps) {
       selectedStrokeId: current.selectedStrokeId,
       showHandles,
     })
+    // innerHTML does not start a load for <image href>. Set it again so the paint shows.
+    for (const image of svg.querySelectorAll('image')) {
+      const href = image.getAttribute('href')
+      if (!href) continue
+      image.setAttribute('href', '')
+      image.setAttribute('href', href)
+    }
     if (time > 0) {
       const positions = new Map(play.players.map((player) => [player.id, playerAtTime(player, play.strokes, time)]))
       applyPositions(svg, play, positions, current.camera)
