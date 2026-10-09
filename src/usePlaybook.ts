@@ -3,7 +3,21 @@ import { commit, createHistory, redo, undo, canRedo, canUndo, type History } fro
 import { createPlay, duplicatePlay, parseBundle, renamePlay, resetPlay } from './play'
 import { deletePlay, loadPlaybook, savePlay, savePlaybookName } from './storage'
 import { showcasePlay } from './play'
+import {
+  bootSync,
+  forgetDelete,
+  getSyncState,
+  rememberDelete,
+  scheduleSync,
+  statusLine,
+  subscribeSync,
+  type SyncState,
+} from './sync'
 import type { FormatId, Play } from './types'
+
+function samePlay(a: Play, b: Play): boolean {
+  return JSON.stringify(a) === JSON.stringify(b)
+}
 
 function replacePlay(list: Play[], play: Play): Play[] {
   const index = list.findIndex((item) => item.id === play.id)
@@ -30,11 +44,14 @@ export function usePlaybook() {
   const [toastUndo, setToastUndo] = useState<(() => void) | null>(null)
   const [saved, setSaved] = useState(false)
   const [memoryOnly, setMemoryOnly] = useState(false)
+  const [account, setAccount] = useState<SyncState>(getSyncState())
   const deletedRef = useRef<Play | null>(null)
   const playsRef = useRef(plays)
   const historyRef = useRef(history)
+  const memoryOnlyRef = useRef(false)
   playsRef.current = plays
   historyRef.current = history
+  memoryOnlyRef.current = memoryOnly
 
   function notify(message: string, undo?: () => void) {
     setToast(message)
@@ -47,27 +64,69 @@ export function usePlaybook() {
     setPlays(replacePlay(playsRef.current, next.present))
   }
 
+  function acceptPlays(next: Play[]) {
+    const previous = playsRef.current
+    if (!memoryOnlyRef.current) {
+      const ids = new Set(next.map((item) => item.id))
+      for (const item of previous) {
+        if (!ids.has(item.id)) void deletePlay(item.id)
+      }
+      for (const item of next) void savePlay(item)
+    }
+    playsRef.current = next
+    setPlays(next)
+    const current = historyRef.current
+    if (!current) {
+      const opened = next[0] ? createHistory(next[0]) : null
+      historyRef.current = opened
+      setHistory(opened)
+      return
+    }
+    const updated = next.find((item) => item.id === current.present.id) ?? null
+    if (updated && (updated === current.present || samePlay(updated, current.present))) return
+    const open = updated ?? next[0] ?? null
+    const opened = open ? createHistory(open) : null
+    historyRef.current = opened
+    setHistory(opened)
+  }
+
+  useEffect(() => subscribeSync(setAccount), [])
+
   useEffect(() => {
     let cancel = false
+    let stop = () => {}
+    const start = () => {
+      stop = bootSync({ getPlays: () => playsRef.current, applyPlays: acceptPlays })
+    }
     loadPlaybook()
       .then((loaded) => {
         if (cancel) return
+        const opened = loaded.plays[0] ? createHistory(loaded.plays[0]) : null
+        playsRef.current = loaded.plays
+        historyRef.current = opened
         setBookName(loaded.name)
         setPlays(loaded.plays)
-        setHistory(loaded.plays[0] ? createHistory(loaded.plays[0]) : null)
+        setHistory(opened)
         setReady(true)
+        start()
       })
       .catch(() => {
         if (cancel) return
         const starter = showcasePlay()
+        const opened = createHistory(starter)
+        playsRef.current = [starter]
+        historyRef.current = opened
         setPlays([starter])
-        setHistory(createHistory(starter))
+        setHistory(opened)
+        memoryOnlyRef.current = true
         setMemoryOnly(true)
         setToast("Can't save on this phone. Use More, then Save a file.")
         setReady(true)
+        start()
       })
     return () => {
       cancel = true
+      stop()
     }
   }, [])
 
@@ -78,7 +137,10 @@ export function usePlaybook() {
     setSaved(false)
     const handle = window.setTimeout(() => {
       savePlay(play)
-        .then(() => setSaved(true))
+        .then(() => {
+          setSaved(true)
+          scheduleSync()
+        })
         .catch(() => {
           setToast('Could not save on this phone.')
           setToastUndo(() => null)
@@ -155,7 +217,9 @@ export function usePlaybook() {
     }
     deletedRef.current = found
     const remaining = playsRef.current.filter((item) => item.id !== id)
+    playsRef.current = remaining
     setPlays(remaining)
+    if (!memoryOnly) rememberDelete(id)
     if (historyRef.current?.present.id === id) {
       const fallback = remaining[0] ?? null
       const next = fallback ? createHistory(fallback) : null
@@ -171,16 +235,23 @@ export function usePlaybook() {
     const found = deletedRef.current
     if (!found) return
     deletedRef.current = null
+    const restored = { ...found, updatedAt: Date.now() }
     if (!memoryOnly) {
       try {
-        await savePlay(found)
+        await savePlay(restored)
       } catch {
         notify('Could not bring that play back.')
         return
       }
+      forgetDelete(restored.id)
+      scheduleSync()
     }
-    setPlays(playsRef.current.some((item) => item.id === found.id) ? playsRef.current : [found, ...playsRef.current])
-    const next = createHistory(found)
+    const list = playsRef.current.some((item) => item.id === restored.id)
+      ? playsRef.current.map((item) => (item.id === restored.id ? restored : item))
+      : [restored, ...playsRef.current]
+    playsRef.current = list
+    setPlays(list)
+    const next = createHistory(restored)
     historyRef.current = next
     setHistory(next)
     notify('Brought it back.')
@@ -222,16 +293,20 @@ export function usePlaybook() {
     setPlays(replacePlay(playsRef.current, restored))
   }
 
+  function stampHistory(next: History): History {
+    return { ...next, present: { ...next.present, updatedAt: Date.now() } }
+  }
+
   function doUndo() {
     const current = historyRef.current
-    if (!current) return
-    publish(undo(current))
+    if (!current || !canUndo(current)) return
+    publish(stampHistory(undo(current)))
   }
 
   function doRedo() {
     const current = historyRef.current
-    if (!current) return
-    publish(redo(current))
+    if (!current || !canRedo(current)) return
+    publish(stampHistory(redo(current)))
   }
 
   return {
@@ -242,6 +317,8 @@ export function usePlaybook() {
     toast,
     toastUndo,
     saved,
+    accountName: account.username,
+    syncStatus: statusLine(saved, account),
     notify,
     canUndo: history ? canUndo(history) : false,
     canRedo: history ? canRedo(history) : false,

@@ -9,10 +9,11 @@ import type { StrokeKind } from '../types'
 import { formatShort } from '../types'
 import { Field } from './Field'
 import { PlaybookList } from './PlaybookList'
+import { AccountSheet } from './AccountSheet'
 import { ExportSheet, MoreSheet, PlayerSheet, PlaySettings, PresetSheet, Sheet } from './Sheets'
 
 type Tool = 'move' | 'draw'
-type SheetId = null | 'book' | 'presets' | 'player' | 'more' | 'export' | 'play'
+type SheetId = null | 'book' | 'presets' | 'player' | 'more' | 'export' | 'play' | 'account'
 const SPEEDS = [0.5, 1, 1.5] as const
 const SPEED_WORD: Record<(typeof SPEEDS)[number], string> = { 0.5: 'Slow', 1: 'Normal', 1.5: 'Fast' }
 const DRAW_WORD: Record<StrokeKind, string> = { route: 'Line', motion: 'Walk', block: 'Block', run: 'Run' }
@@ -157,6 +158,10 @@ export function App() {
         <button type="button" class="primary ghost" onClick={() => fileRef.current?.click()}>
           Open a saved play
         </button>
+        <button type="button" class="text-btn" onClick={() => setSheet('account')}>
+          {book.accountName ?? 'Sign in'}
+        </button>
+        {sheet === 'account' ? <AccountSheet saved={book.saved} onClose={() => setSheet(null)} /> : null}
         <input
           ref={fileRef}
           class="file"
@@ -211,6 +216,9 @@ export function App() {
               <span class="brand">Night Yard</span>
               <span class="play-title">{play.name}</span>
             </button>
+            <button type="button" class="text-btn account-btn" onClick={() => setSheet('account')}>
+              {book.accountName ?? 'Sign in'}
+            </button>
             <button type="button" class="text-btn setup-btn" onClick={() => setSheet('play')}>
               Setup
             </button>
@@ -225,8 +233,12 @@ export function App() {
           </div>
           <p class="sub">
             {play.formation} · {formatShort(play.format)} · Start on {ballLabel(play.los)}
-            {book.saved ? ' · Saved' : ''}
           </p>
+          {book.syncStatus ? (
+            <p class="sync-line" aria-live="polite">
+              {book.syncStatus}
+            </p>
+          ) : null}
         </header>
         <div class="field-wrap">
           <div class="field-frame">
@@ -453,6 +465,7 @@ export function App() {
           onClose={() => setSheet(null)}
         />
       ) : null}
+      {sheet === 'account' ? <AccountSheet saved={book.saved} onClose={() => setSheet(null)} /> : null}
       <input
         ref={fileRef}
         class="file"

@@ -1,7 +1,7 @@
 import preact from '@preact/preset-vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import { defineConfig } from 'vitest/config'
-import { navigationAllowlist, normalizeBase } from './src/basePath.ts'
+import { isPocketBaseRequest, navigationAllowlist, normalizeBase } from './src/basePath.ts'
 
 export default defineConfig(({ command }) => {
   const base = normalizeBase(process.env.BASE_PATH, command === 'build' ? '/nightyard/' : '/')
@@ -36,11 +36,28 @@ export default defineConfig(({ command }) => {
               globPatterns: ['**/*.{js,css,html,svg,png,webp,woff2,webmanifest,ico}'],
               navigateFallback: 'index.html',
               navigateFallbackAllowlist: [navigationAllowlist(base)],
+              navigateFallbackDenylist: [/\/nightyard\/pb(?:\/|$)/],
+              runtimeCaching: (['GET', 'POST', 'PATCH', 'PUT', 'DELETE'] as const).map((method) => ({
+                urlPattern: ({ url }: { url: URL }) => isPocketBaseRequest(url.pathname),
+                handler: 'NetworkOnly' as const,
+                method,
+              })),
               cleanupOutdatedCaches: true,
             },
           }),
         ],
-    server: { host: '127.0.0.1', port: 43123, strictPort: true },
+    server: {
+      host: '127.0.0.1',
+      port: 43123,
+      strictPort: true,
+      proxy: {
+        '/nightyard/pb': {
+          target: 'http://127.0.0.1:8090',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/nightyard\/pb/, '') || '/',
+        },
+      },
+    },
     preview: { host: '127.0.0.1', port: 43123, strictPort: true },
     test: {
       environment: 'node',

@@ -13,6 +13,8 @@ npm run dev
 
 The dev server is [http://127.0.0.1:43123](http://127.0.0.1:43123). Development uses base path `/`, so asset URLs and the document root stay at the origin root. The service worker is not registered in dev.
 
+Accounts are optional. With no account, plays stay in this browser. Sign in with a username and password (8 or more characters, no email) and plays sync to PocketBase at `/nightyard/pb`. The dev server proxies that path to `127.0.0.1:8090`. Set `VITE_POCKETBASE_URL` to a full URL to point somewhere else. See `server/README.md` for the schema and how to start PocketBase.
+
 ```bash
 npm test
 ```
@@ -27,7 +29,7 @@ Production defaults to base path `/nightyard/`, which is the path on [https://ww
 | `npm run build:prod` | always `/nightyard/` |
 | `BASE_PATH=/ npm run build` | `/` (subdomain or dedicated host) |
 
-`npm run build` typechecks, then runs Vite. `npm run build:prod` is the droplet build: it sets `BASE_PATH=/nightyard/` and emits `dist/` with manifest `start_url` and `scope` of `/nightyard/`, and a service worker whose navigation fallback only claims `/nightyard` and paths under it.
+`npm run build` typechecks, then runs Vite. `npm run build:prod` is the droplet build: it sets `BASE_PATH=/nightyard/` and emits `dist/` with manifest `start_url` and `scope` of `/nightyard/`, and a service worker whose navigation fallback only claims `/nightyard` and paths under it. The worker does not cache `/nightyard/pb` and does not answer that path with the app shell. It uses a network-only route for those requests.
 
 Preview a production build locally (same port as dev; stop `npm run dev` first):
 
@@ -87,6 +89,13 @@ location = /nightyard/manifest.webmanifest {
     alias /var/www/nightyard/manifest.webmanifest;
     default_type application/manifest+json;
     add_header Cache-Control "no-cache";
+}
+
+location ^~ /nightyard/pb/ {
+    proxy_pass http://127.0.0.1:8090/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-Host $host;
 }
 
 location ^~ /nightyard/assets/ {
