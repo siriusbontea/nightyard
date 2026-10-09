@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { commit, createHistory, redo, undo, canRedo, canUndo, type History } from './history'
 import { isGuest } from './guest'
-import { corndogPlay, createPlay, duplicatePlay, parseBundle, renamePlay, resetPlay } from './play'
+import { createPlay, duplicatePlay, parseBundle, renamePlay, resetPlay } from './play'
 import { deletePlay, loadPlaybook, savePlay, savePlaybookName } from './storage'
 import { showcasePlay } from './play'
 import {
@@ -28,14 +28,6 @@ function replacePlay(list: Play[], play: Play): Play[] {
   const next = list.slice()
   next[index] = play
   return next
-}
-
-function corndogName(plays: Play[]): string {
-  const names = new Set(plays.map((play) => play.name))
-  if (!names.has('Corndog')) return 'Corndog'
-  let n = 2
-  while (names.has(`Corndog ${n}`)) n += 1
-  return `Corndog ${n}`
 }
 
 function nextName(plays: Play[]): string {
@@ -229,10 +221,11 @@ export function usePlaybook() {
   }
 
   async function create(format: FormatId = '11v11') {
-    const created =
-      format === '11v11'
-        ? corndogPlay(corndogName(playsRef.current))
-        : createPlay({ format, name: nextName(playsRef.current) })
+    const created = createPlay({
+      format,
+      formationId: format === '11v11' ? 'shotgun-trips' : undefined,
+      name: nextName(playsRef.current),
+    })
     if (keepsLocal()) await savePlay(created).then(() => setSaved(true)).catch(() => setToast('Could not save on this phone.'))
     setPlays([created, ...playsRef.current])
     const next = createHistory(created)

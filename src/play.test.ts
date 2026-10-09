@@ -158,7 +158,7 @@ describe('play model', () => {
     const remembered = { ...old, origin: undefined }
     const savedStart = resetPlay({ ...remembered, name: 'Flood edit', los: 10, origin: old })
     expect(savedStart.name).toBe('Flood')
-    expect(savedStart.los).toBe(50)
+    expect(savedStart.los).toBe(30)
     expect(savedStart.id).toBe(old.id)
   })
 
@@ -236,7 +236,7 @@ describe('play model', () => {
     expect(assignmentRows(play).some((row) => row.label === 'X' && /motion/i.test(row.detail))).toBe(true)
   })
 
-  it('keeps a saved line and puts a missing line on the 50', () => {
+  it('keeps a saved line and puts a missing line on the 30', () => {
     const play = createPlay({ format: '5v5', formationId: 'doubles', name: 'Flag mesh' })
     play.los = 15
     const packed = JSON.parse(serializePlay(play)) as { play: { los?: number; format: string } }
@@ -245,12 +245,12 @@ describe('play model', () => {
     expect(kept.format).toBe('5v5')
     expect(sanitizePlay({ ...packed.play, los: 15 })?.los).toBe(15)
     delete packed.play.los
-    expect(parseBundle(JSON.stringify(packed)).plays[0].los).toBe(50)
+    expect(parseBundle(JSON.stringify(packed)).plays[0].los).toBe(30)
   })
 
-  it('paints your team orange and the other team lime, and starts on the 50', () => {
+  it('paints your team orange and the other team lime, and starts on the 30', () => {
     const play = createPlay({ format: '11v11', formationId: 'i-form' })
-    expect(play.los).toBe(50)
+    expect(play.los).toBe(30)
     expect(play.ourSide).toBe('offense')
     expect(play.players.every((player) => player.color === OUR_COLOR)).toBe(true)
     expect(new Set(play.players.map((player) => player.routeColor)).size).toBe(play.players.length)

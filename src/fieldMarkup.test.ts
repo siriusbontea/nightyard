@@ -94,7 +94,9 @@ describe('player markers', () => {
     const camera = cameraForBox(width, height, 50)
     const { w, h } = viewSize(camera)
     expect(w / h).toBeCloseTo(width / height, 4)
-    const svg = fieldMarkup({ play: createPlay({ format: '11v11', formationId: 'shotgun-trips' }), camera, theme: NIGHT })
+    const onTheFifty = createPlay({ format: '11v11', formationId: 'shotgun-trips' })
+    onTheFifty.los = 50
+    const svg = fieldMarkup({ play: onTheFifty, camera, theme: NIGHT })
     const tags = [...svg.matchAll(/<text\b([^>]*)>(\d+)<\/text>/g)]
       .map((match) => ({ attrs: match[1], label: Number(match[2]) }))
       .filter((tag) => /rotate\(/.test(tag.attrs))
@@ -161,7 +163,9 @@ describe('player markers', () => {
       const losY = camera.ahead * camera.scale
       expect(losY).toBeGreaterThan(h * 0.2)
       expect(losY).toBeLessThan(h * 0.75)
-      const svg = fieldMarkup({ play: createPlay({ format: '11v11', formationId: 'shotgun-trips' }), camera, theme: NIGHT })
+      const onTheFifty = createPlay({ format: '11v11', formationId: 'shotgun-trips' })
+      onTheFifty.los = 50
+      const svg = fieldMarkup({ play: onTheFifty, camera, theme: NIGHT })
       const lines = [...svg.matchAll(/<line x1="0" y1="([\d.]+)" x2="([\d.]+)" y2="([\d.]+)"/g)]
         .filter((match) => Math.abs(Number(match[2]) - w) < 1)
         .map((match) => Number(match[1]))
@@ -183,6 +187,25 @@ describe('player markers', () => {
     }
   })
 
+  it('frames a phone on the 30 so the formation, a deep route, and the far end zone fit', () => {
+    const play = createPlay({ format: '11v11', formationId: 'shotgun-trips' })
+    expect(play.los).toBe(30)
+    const camera = cameraForBox(372, 560, play.los)
+    const { h } = viewSize(camera)
+    const svg = fieldMarkup({ play, camera, theme: NIGHT })
+    expect(svg).toContain('data-endzone="far"')
+    expect(svg).toContain(END_ZONE_COLOR)
+    expect(camera.ahead).toBeGreaterThanOrEqual(play.los + 10)
+    for (const player of play.players) {
+      const at = fieldToSvg(player, camera)
+      expect(at.y, player.label).toBeGreaterThan(0)
+      expect(at.y, player.label).toBeLessThan(h)
+    }
+    const routeEnd = fieldToSvg({ x: 0, y: 16 }, camera)
+    expect(routeEnd.y).toBeGreaterThan(0)
+    expect(routeEnd.y).toBeLessThan(h)
+  })
+
   it('shows the far end zone when the snap is on the 3', () => {
     const play = showcasePlay()
     const camera = cameraForBox(402, 640, play.los)
@@ -194,6 +217,7 @@ describe('player markers', () => {
 
   it('numbers a midfield snap up to the 50 and back down, and hides both end zones', () => {
     const midfield = createPlay({ format: '11v11', formationId: 'shotgun-trips' })
+    midfield.los = 50
     const svg = fieldMarkup({ play: midfield, camera: EXPORT_CAMERA, theme: NIGHT })
     expect(svg.match(/>50</g)).toHaveLength(2)
     expect(svg.match(/>40</g)).toHaveLength(4)
@@ -283,6 +307,7 @@ describe('player markers', () => {
 
   it('keeps the LINE chip small and off the players', () => {
     const play = setShowDefense(createPlay({ format: '11v11' }), true)
+    play.los = 50
     const camera = cameraForBox(402, 874, 50)
     const svg = fieldMarkup({ play, camera, theme: NIGHT })
     const chip = svg.match(

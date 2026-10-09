@@ -1,6 +1,9 @@
 /** Regulation field between the goal lines, in yards. */
 export const FIELD_LENGTH = 100
 
+/** Opponent's 30. New plays start here so the far end zone is on screen. */
+export const DEFAULT_LOS = 30
+
 /** End zone depth. Drawn only when that yardage is inside the camera. */
 export const END_ZONE_DEPTH = 10
 

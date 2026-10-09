@@ -1,4 +1,4 @@
-import { END_ZONE_DEPTH, FIELD_LENGTH } from './fieldMarks'
+import { DEFAULT_LOS, END_ZONE_DEPTH, FIELD_LENGTH } from './fieldMarks'
 import type { Point, Stroke } from './types'
 
 /** American football field width in yards (160 feet). */
@@ -50,7 +50,7 @@ export function viewSize(camera: Camera): { w: number; h: number } {
  * blank green bands. The window stays on marked field (end zones included)
  * whenever that field is taller than the screen.
  */
-export function cameraForBox(widthPx: number, heightPx: number, los = 50): Camera {
+export function cameraForBox(widthPx: number, heightPx: number, los = DEFAULT_LOS): Camera {
   const scale = 10
   if (widthPx < 40 || heightPx < 40) return { ahead: 30, behind: 16, scale }
   const depth = (FIELD_WIDTH * heightPx) / widthPx

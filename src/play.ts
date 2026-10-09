@@ -1,4 +1,4 @@
-import { HASH_INSET } from './fieldMarks'
+import { DEFAULT_LOS, HASH_INSET } from './fieldMarks'
 import { OUR_COLOR, THEIR_COLOR, defenseFor, formationById, offenseFor, playerFromSpot, routeColorAt, shapeFor, type Spot } from './formations'
 import { FIELD_WIDTH, pointOnStroke } from './geometry'
 import { canRedo, canUndo, commit, createHistory, redo, undo, type History } from './history'
@@ -29,7 +29,7 @@ export function createPlay(options: {
     formation: formation.name,
     formationId: formation.id,
     format: options.format,
-    los: 50,
+    los: DEFAULT_LOS,
     notes: '',
     ourSide: 'offense',
     showDefense: false,
@@ -80,7 +80,7 @@ function drawn(playerId: string, kind: StrokeKind, preset: PresetId | null, poin
   }
 }
 
-/** Goal-line bunch. Fresh books and New play start here. A book that already has plays is left alone. */
+/** Goal-line bunch. A fresh book starts here. New play uses the 30. A book that already has plays is left alone. */
 export function corndogPlay(name = 'Corndog'): Play {
   const ball = FIELD_WIDTH - HASH_INSET
   const play = createPlay({ format: '11v11', formationId: 'trips-bunch', name })
@@ -436,7 +436,7 @@ export function sanitizePlay(input: unknown): Play | null {
     formation: typeof raw.formation === 'string' && raw.formation.trim() ? raw.formation.trim().slice(0, 40) : formationById(format, formationId).name,
     formationId,
     format,
-    los: typeof raw.los === 'number' ? Math.min(50, Math.max(1, Math.round(raw.los))) : 50,
+    los: typeof raw.los === 'number' ? Math.min(50, Math.max(1, Math.round(raw.los))) : DEFAULT_LOS,
     notes: typeof raw.notes === 'string' ? raw.notes.slice(0, 600) : '',
     ourSide,
     showDefense: Boolean(raw.showDefense),

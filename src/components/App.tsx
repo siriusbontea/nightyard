@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
+import { DEFAULT_LOS } from '../fieldMarks'
 import { cameraForBox } from '../geometry'
 import { applyPreset, clearPlayerStrokes, deleteStroke, serializePlay, serializePlaybook, slug, updatePlayer } from '../play'
 import { renderPng } from '../pngExport'
@@ -21,7 +22,7 @@ const SPEED_WORD: Record<(typeof SPEEDS)[number], string> = { 0.5: 'Slow', 1: 'N
 const DRAW_WORD: Record<StrokeKind, string> = { route: 'Line', motion: 'Walk', block: 'Block', run: 'Run' }
 
 /** Guess the field frame before it is measured so the first paint is already full. */
-function openingCamera(los = 50) {
+function openingCamera(los = DEFAULT_LOS) {
   if (typeof window === 'undefined') return cameraForBox(390, 680, los)
   const width = Math.max(40, Math.min(window.innerWidth, 560) - 20)
   const height = Math.max(280, window.innerHeight - 210)
@@ -41,7 +42,7 @@ export function App() {
   const [includeNotes, setIncludeNotes] = useState(true)
   const [includeAssignments, setIncludeAssignments] = useState(true)
   const [busy, setBusy] = useState(false)
-  const [camera, setCamera] = useState(() => openingCamera(50))
+  const [camera, setCamera] = useState(() => openingCamera(DEFAULT_LOS))
   const [accountMode, setAccountMode] = useState<'in' | 'up'>('in')
   const [savePrompt, setSavePrompt] = useState(false)
   const [welcomeOn, setWelcomeOn] = useState(() => shouldShowWelcome(false, welcomeDismissed()))
@@ -55,7 +56,7 @@ export function App() {
     const measure = () => {
       const rect = el.getBoundingClientRect()
       if (rect.width < 40 || rect.height < 40) return
-      setCamera(cameraForBox(rect.width, rect.height, play?.los ?? 50))
+      setCamera(cameraForBox(rect.width, rect.height, play?.los ?? DEFAULT_LOS))
     }
     measure()
     const observer = new ResizeObserver(measure)
