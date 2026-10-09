@@ -233,6 +233,32 @@ function endZoneArt(top: number, height: number, width: number, upright: boolean
   return `<g data-endzone="near" opacity="${opacity}" pointer-events="none" transform="rotate(180 ${cx} ${cy})">${image}</g>`
 }
 
+/**
+ * Line of scrimmage on the snap yard line, sideline to sideline.
+ * No filter: a flat line has no height, and a bounding-box glow clips it.
+ * The chip sits on the left sideline, just behind the line, clear of the players.
+ */
+function scrimmageMarkup(losY: string, width: number, scale: number, theme: Theme): string {
+  const print = theme.outlineOnly
+  const edge = print ? 6.4 : 6.8
+  const parts = [
+    `<line data-los="edge" x1="0" y1="${losY}" x2="${width}" y2="${losY}" stroke="#ffffff" stroke-width="${edge}" pointer-events="none"/>`,
+  ]
+  const dash = print ? ' stroke-dasharray="0.01 9" stroke-linecap="round"' : ''
+  parts.push(
+    `<line data-los="line" x1="0" y1="${losY}" x2="${width}" y2="${losY}" stroke="${theme.los}" stroke-width="4"${dash} pointer-events="none"/>`,
+  )
+  const chipW = 32
+  const chipH = 14
+  const chipX = (0.28 * scale).toFixed(1)
+  const chipY = (Number(losY) + 0.4 * scale).toFixed(1)
+  const ink = print ? '#111111' : theme.los
+  parts.push(
+    `<g data-los="chip" pointer-events="none" transform="translate(${chipX} ${chipY})"><rect width="${chipW}" height="${chipH}" rx="7" fill="#ffffff" stroke="${ink}" stroke-width="1.2"/><text x="${(chipW / 2).toFixed(1)}" y="${(chipH / 2).toFixed(1)}" fill="${ink}" font-family="Oswald, Impact, sans-serif" font-size="11" text-anchor="middle" dominant-baseline="central">LINE</text></g>`,
+  )
+  return parts.join('')
+}
+
 export function fieldMarkup(options: {
   play: Play
   camera: Camera
@@ -251,10 +277,6 @@ export function fieldMarkup(options: {
     <filter id="grain-${theme.id}" x="0" y="0" width="100%" height="100%">
       <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="2" seed="4"/>
       <feColorMatrix type="saturate" values="0"/>
-    </filter>
-    <filter id="glow-${theme.id}" x="-20%" y="-800%" width="140%" height="1700%">
-      <feGaussianBlur stdDeviation="2.4" result="blur"/>
-      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
     </filter>
     <radialGradient id="vig-${theme.id}" cx="50%" cy="40%" r="75%">
       <stop offset="55%" stop-color="${theme.vignette ?? '#000'}" stop-opacity="0"/>
@@ -305,16 +327,7 @@ export function fieldMarkup(options: {
     parts.push(`<line x1="${(hashR - tick).toFixed(1)}" y1="${y.toFixed(1)}" x2="${(hashR + tick).toFixed(1)}" y2="${y.toFixed(1)}" stroke="${stroke}" stroke-width="1.1"/>`)
     parts.push(`<line x1="${(w - tick).toFixed(1)}" y1="${y.toFixed(1)}" x2="${w}" y2="${y.toFixed(1)}" stroke="${stroke}" stroke-width="1.1"/>`)
   }
-  const losY = ahead * scale
-  parts.push(
-    `<line x1="0" y1="${losY}" x2="${w}" y2="${losY}" stroke="${theme.los}" stroke-width="3.2"${theme.losGlow ? ` filter="url(#glow-${theme.id})"` : ''}/>`,
-  )
-  const tagX = 13.2 * scale
-  const tagFill = theme.outlineOnly ? '#ffffff' : '#062018'
-  const tagInk = theme.outlineOnly ? '#111111' : theme.los
-  parts.push(
-    `<g transform="translate(${tagX.toFixed(1)} ${(losY - 46).toFixed(1)})"><rect width="42" height="18" rx="9" fill="${tagFill}" stroke="${tagInk}" stroke-width="1.4"/><text x="21" y="10" fill="${tagInk}" font-family="Oswald, Impact, sans-serif" font-size="11" text-anchor="middle" dominant-baseline="central">LINE</text></g>`,
-  )
+  parts.push(scrimmageMarkup(svgY(fieldYAt(play.los, play.los)).toFixed(2), w, scale, theme))
   const ball = fieldToSvg({ x: FIELD_WIDTH / 2, y: -0.85 }, camera)
   parts.push(ballMarkup(ball.x, ball.y, scale, theme.ballFill, theme.ballStroke))
   parts.push(yardNumbers(play.los, scale, ahead, h, theme))

@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { END_ZONE_COLOR, END_ZONE_LINE } from './endZoneArt'
 import { fieldMarkup, labelFontSize, labelInk } from './fieldMarkup'
-import { OUR_COLOR, THEIR_COLOR, defenseFor } from './formations'
-import { EXPORT_CAMERA, FIELD_WIDTH, PLAYER_R, cameraForBox, viewSize } from './geometry'
+import { fieldYAt } from './fieldMarks'
+import { OUR_COLOR, ROUTE_PALETTE, THEIR_COLOR, defenseFor } from './formations'
+import { EXPORT_CAMERA, FIELD_WIDTH, PLAYER_R, cameraForBox, fieldToSvg, viewSize } from './geometry'
 import { createPlay, setOurSide, setShowDefense, showcasePlay } from './play'
-import { NIGHT, PRINT } from './theme'
+import { LOS_BLUE, NIGHT, PRINT } from './theme'
 
 function labelTag(svg: string, label: string): string {
   const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -231,5 +232,67 @@ describe('player markers', () => {
     const printed = fieldMarkup({ play, camera: EXPORT_CAMERA, theme: PRINT })
     expect(printed).toContain('>40<')
     expect(printed).toContain('fill="#ffffff"')
+  })
+
+  it('puts the line of scrimmage on the snap yard line, sideline to sideline', () => {
+    expect(ROUTE_PALETTE).not.toContain(LOS_BLUE)
+    expect(LOS_BLUE.toLowerCase()).not.toBe(OUR_COLOR)
+    expect(LOS_BLUE.toLowerCase()).not.toBe(THEIR_COLOR)
+    for (const los of [50, 5]) {
+      for (const camera of [cameraForBox(402, 874, los), cameraForBox(1280, 800, los), EXPORT_CAMERA]) {
+        const play = createPlay({ format: '11v11' })
+        play.los = los
+        const { w } = viewSize(camera)
+        const y = (camera.ahead * camera.scale - fieldYAt(los, los) * camera.scale).toFixed(2)
+        const svg = fieldMarkup({ play, camera, theme: NIGHT })
+        const line = svg.match(/<line [^>]*data-los="line"[^>]*>/)?.[0] ?? ''
+        expect(line, `${los} ${camera.ahead}`).toContain(`y1="${y}"`)
+        expect(line).toContain(`y2="${y}"`)
+        expect(line).toContain('x1="0"')
+        expect(line).toContain(`x2="${w}"`)
+        expect(line).toContain(`stroke="${LOS_BLUE}"`)
+        expect(line).not.toContain('filter=')
+        expect(line).not.toContain('stroke-dasharray')
+        expect(svg).toContain(`<line x1="0" y1="${y}" x2="${w}" y2="${y}" stroke="${NIGHT.line}"`)
+        expect(svg).not.toContain('feGaussianBlur')
+      }
+    }
+    const printed = fieldMarkup({ play: showcasePlay(), camera: EXPORT_CAMERA, theme: PRINT })
+    const dotted = printed.match(/<line [^>]*data-los="line"[^>]*>/)?.[0] ?? ''
+    expect(dotted).toContain('stroke="#111111"')
+    expect(dotted).toContain('stroke-dasharray="0.01 9"')
+    expect(dotted).toContain('stroke-linecap="round"')
+    expect(dotted).not.toContain(LOS_BLUE)
+    const chip = printed.match(/<g data-los="chip"[^>]*>[\s\S]*?<\/g>/)?.[0] ?? ''
+    expect(chip).toContain('fill="#ffffff"')
+    expect(chip).toContain('stroke="#111111"')
+    expect(chip).toContain('fill="#111111"')
+    expect(chip).toContain('>LINE<')
+    expect(chip).not.toContain(LOS_BLUE)
+  })
+
+  it('keeps the LINE chip small and off the players', () => {
+    const play = setShowDefense(createPlay({ format: '11v11' }), true)
+    const camera = cameraForBox(402, 874, 50)
+    const svg = fieldMarkup({ play, camera, theme: NIGHT })
+    const chip = svg.match(
+      /<g data-los="chip"[^>]*transform="translate\(([\d.]+) ([\d.]+)\)"><rect width="([\d.]+)" height="([\d.]+)"/,
+    )
+    expect(chip).not.toBeNull()
+    const x = Number(chip?.[1])
+    const y = Number(chip?.[2])
+    const width = Number(chip?.[3])
+    const height = Number(chip?.[4])
+    expect(width).toBeLessThan(42)
+    expect(height).toBeLessThan(18)
+    expect(x).toBeLessThan(4 * camera.scale)
+    expect(x + width).toBeLessThan(4 * camera.scale)
+    for (const player of play.players) {
+      const at = fieldToSvg(player, camera)
+      const nearestX = Math.max(x, Math.min(at.x, x + width))
+      const nearestY = Math.max(y, Math.min(at.y, y + height))
+      const gap = Math.hypot(at.x - nearestX, at.y - nearestY)
+      expect(gap, player.label).toBeGreaterThan(PLAYER_R * camera.scale)
+    }
   })
 })

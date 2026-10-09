@@ -7,7 +7,6 @@ export interface Theme {
   number: string
   numberStroke: string
   los: string
-  losGlow: boolean
   grain: boolean
   vignette: string | null
   outlineOnly: boolean
@@ -29,6 +28,12 @@ export const COLOR_TURF_A = '#2f9a4a'
 /** Bright orange sampled from the Dawgs lettering (most common letter pixel). */
 export const ACCENT = '#F9682D'
 
+/**
+ * Line of scrimmage. Royal blue, not one of the route blues, and not orange or lime.
+ * A white edge in the field drawing keeps it readable on the green.
+ */
+export const LOS_BLUE = '#1D4ED8'
+
 export const NIGHT: Theme = {
   id: 'night',
   turf: ['#1b6b3c', '#165a33'],
@@ -37,8 +42,7 @@ export const NIGHT: Theme = {
   lineSoft: 'rgba(255,255,255,0.55)',
   number: '#f7fafc',
   numberStroke: '#0c3320',
-  los: '#ffffff',
-  losGlow: true,
+  los: LOS_BLUE,
   grain: true,
   vignette: '#02140c',
   outlineOnly: false,
@@ -63,8 +67,7 @@ export const COLOR_FIELD: Theme = {
   lineSoft: 'rgba(255,255,255,0.7)',
   number: '#ffffff',
   numberStroke: '#14532d',
-  los: '#ffffff',
-  losGlow: false,
+  los: LOS_BLUE,
   grain: true,
   vignette: '#06331a',
   outlineOnly: false,
@@ -90,7 +93,6 @@ export const PRINT: Theme = {
   number: '#111111',
   numberStroke: 'none',
   los: '#111111',
-  losGlow: false,
   grain: false,
   vignette: null,
   outlineOnly: true,
