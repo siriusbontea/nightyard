@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { commit, createHistory, redo, undo, canRedo, canUndo, type History } from './history'
 import { isGuest } from './guest'
-import { createPlay, duplicatePlay, parseBundle, renamePlay, resetPlay } from './play'
+import { createPlay, duplicatePlay, parseBundle, renamePlay, resetPlay, sanitizePlay } from './play'
 import { deletePlay, loadPlaybook, savePlay, savePlaybookName } from './storage'
 import { showcasePlay } from './play'
 import {
@@ -315,6 +315,28 @@ export function usePlaybook() {
     if (keepsLocal()) await savePlaybookName(trimmed).catch(() => setToast('Could not rename the plays.'))
   }
 
+  async function openSaved(incoming: Play) {
+    const play = sanitizePlay(incoming)
+    if (!play) return
+    if (keepsLocal()) {
+      try {
+        await savePlay(play)
+      } catch {
+        notify('Could not save on this phone.')
+        return
+      }
+    }
+    const merged = playsRef.current.some((item) => item.id === play.id)
+      ? playsRef.current.map((item) => (item.id === play.id ? play : item))
+      : [play, ...playsRef.current]
+    playsRef.current = merged
+    setPlays(merged)
+    const next = createHistory(play)
+    historyRef.current = next
+    setHistory(next)
+    notify(`Opened ${play.name}`)
+  }
+
   async function importJson(text: string) {
     const bundle = parseBundle(text)
     if (keepsLocal()) {
@@ -384,6 +406,7 @@ export function usePlaybook() {
     reset,
     renameBook,
     importJson,
+    openSaved,
     undo: doUndo,
     redo: doRedo,
   }

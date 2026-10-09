@@ -13,6 +13,7 @@ import { PlaybookList } from './PlaybookList'
 import { dismissWelcome, saveNeedsAccount, shouldShowWelcome, welcomeDismissed } from '../guest'
 import { AccountSheet } from './AccountSheet'
 import { ExportSheet, MoreSheet, PlayerSheet, PlaySettings, PresetSheet, Sheet } from './Sheets'
+import { SavedPlaysSheet } from './SavedPlaysSheet'
 import { GuestSavePrompt, WelcomeCard } from './WelcomeCard'
 
 type Tool = 'move' | 'draw'
@@ -46,6 +47,7 @@ export function App() {
   const [accountMode, setAccountMode] = useState<'in' | 'up'>('in')
   const [savePrompt, setSavePrompt] = useState(false)
   const [welcomeOn, setWelcomeOn] = useState(() => shouldShowWelcome(false, welcomeDismissed()))
+  const [savedOpen, setSavedOpen] = useState(false)
   const frameRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const play = book.play
@@ -187,7 +189,7 @@ export function App() {
         <button type="button" class="primary" onClick={() => startNew()}>
           New play
         </button>
-        <button type="button" class="primary ghost" onClick={() => fileRef.current?.click()}>
+        <button type="button" class="primary ghost" onClick={() => setSavedOpen(true)}>
           Open a saved play
         </button>
         {book.guest && !showWelcome ? (
@@ -209,6 +211,29 @@ export function App() {
         {savePrompt ? <GuestSavePrompt onCreate={() => openAccount('up')} onClose={() => setSavePrompt(false)} /> : null}
         {showWelcome ? (
           <WelcomeCard onCreate={() => openAccount('up')} onTry={tryFirst} onSignIn={() => openAccount('in')} />
+        ) : null}
+        {savedOpen ? (
+          <SavedPlaysSheet
+            signedIn={Boolean(book.accountName)}
+            phonePlays={book.plays}
+            onOpen={(next) => {
+              void book.openSaved(next)
+              setSavedOpen(false)
+            }}
+            onSignIn={() => {
+              setSavedOpen(false)
+              openAccount('in')
+            }}
+            onCreateAccount={() => {
+              setSavedOpen(false)
+              openAccount('up')
+            }}
+            onFile={() => {
+              setSavedOpen(false)
+              fileRef.current?.click()
+            }}
+            onClose={() => setSavedOpen(false)}
+          />
         ) : null}
         <input
           ref={fileRef}
@@ -254,7 +279,7 @@ export function App() {
           onDuplicate={book.duplicate}
           onDelete={book.remove}
           onCreate={() => startNew()}
-          onImport={() => fileRef.current?.click()}
+          onImport={() => setSavedOpen(true)}
         />
       </aside>
       <div class="stage">
@@ -425,7 +450,7 @@ export function App() {
             }}
             onDelete={book.remove}
             onCreate={() => startNew()}
-            onImport={() => fileRef.current?.click()}
+            onImport={() => setSavedOpen(true)}
           />
         </Sheet>
       ) : null}
@@ -531,6 +556,33 @@ export function App() {
       {savePrompt ? <GuestSavePrompt onCreate={() => openAccount('up')} onClose={() => setSavePrompt(false)} /> : null}
       {showWelcome ? (
         <WelcomeCard onCreate={() => openAccount('up')} onTry={tryFirst} onSignIn={() => openAccount('in')} />
+      ) : null}
+      {savedOpen ? (
+        <SavedPlaysSheet
+          signedIn={Boolean(book.accountName)}
+          phonePlays={book.plays}
+          onOpen={(next) => {
+            void book.openSaved(next)
+            setSelectedPlayerId(null)
+            setSelectedStrokeId(null)
+            stopPlayback()
+            setSavedOpen(false)
+            setSheet(null)
+          }}
+          onSignIn={() => {
+            setSavedOpen(false)
+            openAccount('in')
+          }}
+          onCreateAccount={() => {
+            setSavedOpen(false)
+            openAccount('up')
+          }}
+          onFile={() => {
+            setSavedOpen(false)
+            fileRef.current?.click()
+          }}
+          onClose={() => setSavedOpen(false)}
+        />
       ) : null}
       <input
         ref={fileRef}
