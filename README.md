@@ -13,7 +13,7 @@ npm run dev
 
 The dev server is [http://127.0.0.1:43123](http://127.0.0.1:43123). Development uses base path `/`, so asset URLs and the document root stay at the origin root. The service worker is not registered in dev.
 
-Accounts are optional. With no account, plays stay in this browser. Sign in with a username and password (8 or more characters, no email) and plays sync to PocketBase at `/nightyard/pb`. The dev server proxies that path to `127.0.0.1:8090`. Set `VITE_POCKETBASE_URL` to a full URL to point somewhere else. See `server/README.md` for the schema and how to start PocketBase.
+A free account is optional. The first visit shows a welcome card once on that device: make a free account, or try the editor as a guest. Guests can draw and play in that session. Save, Save all, a new saved play, and sync ask for a free account instead of writing, and the play stays on the screen until they sign up. A small guest chip opens signup. Plays already saved on this phone stay there, and making an account uploads them. Sign in with a username and password (8 or more characters, no email) and plays sync to PocketBase at `/nightyard/pb`. The dev server proxies that path to `127.0.0.1:8090`. Set `VITE_POCKETBASE_URL` to a full URL to point somewhere else. See `server/README.md` for the schema and how to start PocketBase.
 
 ```bash
 npm test

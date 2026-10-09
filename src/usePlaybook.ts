@@ -1,14 +1,17 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { commit, createHistory, redo, undo, canRedo, canUndo, type History } from './history'
-import { createPlay, duplicatePlay, parseBundle, renamePlay, resetPlay } from './play'
+import { isGuest } from './guest'
+import { corndogPlay, createPlay, duplicatePlay, parseBundle, renamePlay, resetPlay } from './play'
 import { deletePlay, loadPlaybook, savePlay, savePlaybookName } from './storage'
 import { showcasePlay } from './play'
 import {
   bootSync,
+  currentUsername,
   forgetDelete,
   getSyncState,
   rememberDelete,
   scheduleSync,
+  setFreshSeed,
   statusLine,
   subscribeSync,
   type SyncState,
@@ -25,6 +28,14 @@ function replacePlay(list: Play[], play: Play): Play[] {
   const next = list.slice()
   next[index] = play
   return next
+}
+
+function corndogName(plays: Play[]): string {
+  const names = new Set(plays.map((play) => play.name))
+  if (!names.has('Corndog')) return 'Corndog'
+  let n = 2
+  while (names.has(`Corndog ${n}`)) n += 1
+  return `Corndog ${n}`
 }
 
 function nextName(plays: Play[]): string {
@@ -44,14 +55,24 @@ export function usePlaybook() {
   const [toastUndo, setToastUndo] = useState<(() => void) | null>(null)
   const [saved, setSaved] = useState(false)
   const [memoryOnly, setMemoryOnly] = useState(false)
+  const [guest, setGuest] = useState(false)
   const [account, setAccount] = useState<SyncState>(getSyncState())
   const deletedRef = useRef<Play | null>(null)
   const playsRef = useRef(plays)
   const historyRef = useRef(history)
   const memoryOnlyRef = useRef(false)
+  const guestRef = useRef(false)
+  const bookNameRef = useRef(bookName)
+  const signedRef = useRef(getSyncState().signedIn)
   playsRef.current = plays
   historyRef.current = history
   memoryOnlyRef.current = memoryOnly
+  guestRef.current = guest
+  bookNameRef.current = bookName
+
+  function keepsLocal(): boolean {
+    return !memoryOnlyRef.current && !guestRef.current
+  }
 
   function notify(message: string, undo?: () => void) {
     setToast(message)
@@ -66,7 +87,7 @@ export function usePlaybook() {
 
   function acceptPlays(next: Play[]) {
     const previous = playsRef.current
-    if (!memoryOnlyRef.current) {
+    if (keepsLocal()) {
       const ids = new Set(next.map((item) => item.id))
       for (const item of previous) {
         if (!ids.has(item.id)) void deletePlay(item.id)
@@ -107,7 +128,11 @@ export function usePlaybook() {
         setBookName(loaded.name)
         setPlays(loaded.plays)
         setHistory(opened)
+        const nextGuest = isGuest(Boolean(currentUsername()), loaded.legacy)
+        guestRef.current = nextGuest
+        setGuest(nextGuest)
         setReady(true)
+        setFreshSeed(loaded.freshSeed)
         start()
       })
       .catch(() => {
@@ -120,6 +145,7 @@ export function usePlaybook() {
         setHistory(opened)
         memoryOnlyRef.current = true
         setMemoryOnly(true)
+        setFreshSeed({ id: starter.id, updatedAt: starter.updatedAt })
         setToast("Can't save on this phone. Use More, then Save a file.")
         setReady(true)
         start()
@@ -133,9 +159,10 @@ export function usePlaybook() {
   const play = history?.present ?? null
 
   useEffect(() => {
-    if (!ready || !play || memoryOnly) return
+    if (!ready || !play || memoryOnly || guest || guestRef.current) return
     setSaved(false)
     const handle = window.setTimeout(() => {
+      if (!keepsLocal()) return
       savePlay(play)
         .then(() => {
           setSaved(true)
@@ -147,7 +174,36 @@ export function usePlaybook() {
         })
     }, 280)
     return () => window.clearTimeout(handle)
-  }, [play, ready, memoryOnly])
+  }, [play, ready, memoryOnly, guest])
+
+  useEffect(() => {
+    if (!ready || !account.signedIn || !guest) return
+    let cancel = false
+    const plays = playsRef.current
+    void (async () => {
+      try {
+        for (const item of plays) await savePlay(item)
+        await savePlaybookName(bookNameRef.current)
+        if (cancel) return
+        guestRef.current = false
+        setGuest(false)
+        scheduleSync()
+      } catch {
+        if (!cancel) setToast('Could not save on this phone.')
+      }
+    })()
+    return () => {
+      cancel = true
+    }
+  }, [account.signedIn, ready, guest])
+
+  useEffect(() => {
+    if (!ready) return
+    if (account.signedIn && !signedRef.current && playsRef.current.length > 0) {
+      notify('Your plays are on your account.')
+    }
+    signedRef.current = account.signedIn
+  }, [account.signedIn, ready])
 
   useEffect(() => {
     if (!toast) return
@@ -173,8 +229,11 @@ export function usePlaybook() {
   }
 
   async function create(format: FormatId = '11v11') {
-    const created = createPlay({ format, formationId: format === '11v11' ? 'shotgun-trips' : undefined, name: nextName(playsRef.current) })
-    if (!memoryOnly) await savePlay(created).then(() => setSaved(true)).catch(() => setToast('Could not save on this phone.'))
+    const created =
+      format === '11v11'
+        ? corndogPlay(corndogName(playsRef.current))
+        : createPlay({ format, name: nextName(playsRef.current) })
+    if (keepsLocal()) await savePlay(created).then(() => setSaved(true)).catch(() => setToast('Could not save on this phone.'))
     setPlays([created, ...playsRef.current])
     const next = createHistory(created)
     historyRef.current = next
@@ -188,7 +247,7 @@ export function usePlaybook() {
     if (historyRef.current?.present.id === id) update(renamed)
     else {
       setPlays(replacePlay(playsRef.current, { ...renamed, updatedAt: Date.now() }))
-      if (!memoryOnly) await savePlay({ ...renamed, updatedAt: Date.now() }).catch(() => setToast('Could not save on this phone.'))
+      if (keepsLocal()) await savePlay({ ...renamed, updatedAt: Date.now() }).catch(() => setToast('Could not save on this phone.'))
     }
   }
 
@@ -196,7 +255,7 @@ export function usePlaybook() {
     const found = playsRef.current.find((item) => item.id === id)
     if (!found) return
     const copy = duplicatePlay(found)
-    if (!memoryOnly) await savePlay(copy).catch(() => setToast('Could not save on this phone.'))
+    if (keepsLocal()) await savePlay(copy).catch(() => setToast('Could not save on this phone.'))
     setPlays([copy, ...playsRef.current])
     const next = createHistory(copy)
     historyRef.current = next
@@ -207,7 +266,7 @@ export function usePlaybook() {
   async function remove(id: string) {
     const found = playsRef.current.find((item) => item.id === id)
     if (!found) return
-    if (!memoryOnly) {
+    if (keepsLocal()) {
       try {
         await deletePlay(id)
       } catch {
@@ -219,7 +278,7 @@ export function usePlaybook() {
     const remaining = playsRef.current.filter((item) => item.id !== id)
     playsRef.current = remaining
     setPlays(remaining)
-    if (!memoryOnly) rememberDelete(id)
+    if (keepsLocal()) rememberDelete(id)
     if (historyRef.current?.present.id === id) {
       const fallback = remaining[0] ?? null
       const next = fallback ? createHistory(fallback) : null
@@ -236,7 +295,7 @@ export function usePlaybook() {
     if (!found) return
     deletedRef.current = null
     const restored = { ...found, updatedAt: Date.now() }
-    if (!memoryOnly) {
+    if (keepsLocal()) {
       try {
         await savePlay(restored)
       } catch {
@@ -260,12 +319,12 @@ export function usePlaybook() {
   async function renameBook(name: string) {
     const trimmed = name.trim() || 'Night Yard'
     setBookName(trimmed)
-    if (!memoryOnly) await savePlaybookName(trimmed).catch(() => setToast('Could not rename the plays.'))
+    if (keepsLocal()) await savePlaybookName(trimmed).catch(() => setToast('Could not rename the plays.'))
   }
 
   async function importJson(text: string) {
     const bundle = parseBundle(text)
-    if (!memoryOnly) {
+    if (keepsLocal()) {
       for (const item of bundle.plays) await savePlay(item)
       if (playsRef.current.length === 0 && bundle.kind === 'playbook') await savePlaybookName(bundle.name)
     }
@@ -318,7 +377,8 @@ export function usePlaybook() {
     toastUndo,
     saved,
     accountName: account.username,
-    syncStatus: statusLine(saved, account),
+    guest,
+    syncStatus: guest ? '' : statusLine(saved, account),
     notify,
     canUndo: history ? canUndo(history) : false,
     canRedo: history ? canRedo(history) : false,

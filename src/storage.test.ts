@@ -10,31 +10,44 @@ describe('playbook save and load', () => {
     globalThis.indexedDB = new IDBFactory()
   })
 
-  it('seeds a starter play, then saves, renames, and deletes', async () => {
+  it('holds a guest starter in memory, then keeps a book once it is saved', async () => {
     const first = await loadPlaybook()
     expect(first.name).toBe('Night Yard')
+    expect(first.legacy).toBe(false)
     expect(first.plays).toHaveLength(1)
-    expect(first.plays[0].name).toBe('Stick')
+    expect(first.plays[0].name).toBe('Corndog')
     expect(first.plays[0].format).toBe('11v11')
-    expect(first.plays[0].los).toBe(50)
+    expect(first.plays[0].los).toBe(3)
+    expect(first.freshSeed?.id).toBe(first.plays[0].id)
+
+    const stillGuest = await loadPlaybook()
+    expect(stillGuest.legacy).toBe(false)
+    expect(stillGuest.plays[0].id).not.toBe(first.plays[0].id)
 
     const extra = createPlay({ format: '7v7', formationId: 'spread', name: 'Flood' })
+    await savePlay(first.plays[0])
     await savePlay(extra)
     await savePlaybookName('Friday night')
     const loaded = await loadPlaybook()
+    expect(loaded.legacy).toBe(true)
     expect(loaded.name).toBe('Friday night')
-    expect(loaded.plays.map((play) => play.name).sort()).toEqual(['Flood', 'Stick'])
+    expect(loaded.plays.map((play) => play.name).sort()).toEqual(['Corndog', 'Flood'])
+    expect(loaded.freshSeed).toBeNull()
 
     await deletePlay(extra.id)
     const after = await loadPlaybook()
+    expect(after.legacy).toBe(true)
     expect(after.plays.map((play) => play.id)).toEqual([first.plays[0].id])
     expect(after.name).toBe('Friday night')
   })
 
   it('does not resurrect the starter after the book has been seeded and emptied', async () => {
     const first = await loadPlaybook()
+    await savePlay(first.plays[0])
+    await savePlaybookName('Night Yard')
     await deletePlay(first.plays[0].id)
     const empty = await loadPlaybook()
+    expect(empty.legacy).toBe(true)
     expect(empty.plays).toHaveLength(0)
   })
 

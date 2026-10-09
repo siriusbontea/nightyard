@@ -457,6 +457,51 @@ textarea { min-height: 96px; resize: vertical; }
 .sheet-body { padding: 4px 16px 20px; display: flex; flex-direction: column; gap: 10px; }
 .field-label { display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: var(--muted); font-weight: 650; }
 .fine, .empty-copy { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.45; }
+.welcome-scrim { align-items: center; padding: 20px; z-index: 18; }
+.welcome-card {
+  width: min(360px, 100%);
+  background: var(--bg-sheet);
+  border-radius: 22px;
+  padding: 22px 18px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+}
+.welcome-card h2 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 28px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.welcome-copy { margin: 0; font-size: 18px; line-height: 1.35; }
+.welcome-btn { min-height: 52px; font-size: 17px; }
+.welcome-link {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  min-height: 44px;
+  font-size: 15px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.guest-chip {
+  display: block;
+  width: calc(100% - 8px);
+  margin: 8px 4px 0;
+  min-height: 40px;
+  border-radius: 999px;
+  border: 1px solid rgba(249, 104, 45, 0.7);
+  background: #2A1812;
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1.25;
+  padding: 8px 12px;
+  white-space: normal;
+}
 .form-error { margin: 0; color: var(--danger); font-weight: 700; font-size: 16px; line-height: 1.35; }
 .secret { display: flex; gap: 8px; align-items: center; }
 .secret input { flex: 1; min-width: 0; }

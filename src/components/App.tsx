@@ -9,8 +9,10 @@ import type { StrokeKind } from '../types'
 import { formatShort } from '../types'
 import { Field } from './Field'
 import { PlaybookList } from './PlaybookList'
+import { dismissWelcome, saveNeedsAccount, shouldShowWelcome, welcomeDismissed } from '../guest'
 import { AccountSheet } from './AccountSheet'
 import { ExportSheet, MoreSheet, PlayerSheet, PlaySettings, PresetSheet, Sheet } from './Sheets'
+import { GuestSavePrompt, WelcomeCard } from './WelcomeCard'
 
 type Tool = 'move' | 'draw'
 type SheetId = null | 'book' | 'presets' | 'player' | 'more' | 'export' | 'play' | 'account'
@@ -40,6 +42,9 @@ export function App() {
   const [includeAssignments, setIncludeAssignments] = useState(true)
   const [busy, setBusy] = useState(false)
   const [camera, setCamera] = useState(() => openingCamera(50))
+  const [accountMode, setAccountMode] = useState<'in' | 'up'>('in')
+  const [savePrompt, setSavePrompt] = useState(false)
+  const [welcomeOn, setWelcomeOn] = useState(() => shouldShowWelcome(false, welcomeDismissed()))
   const frameRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const play = book.play
@@ -112,7 +117,32 @@ export function App() {
     setT(0)
   }
 
+  function openAccount(mode: 'in' | 'up') {
+    setAccountMode(mode)
+    setSavePrompt(false)
+    setSheet('account')
+  }
+
+  function tryFirst() {
+    dismissWelcome()
+    setWelcomeOn(false)
+  }
+
+  useEffect(() => {
+    if (!book.accountName) return
+    dismissWelcome()
+    setWelcomeOn(false)
+  }, [book.accountName])
+
+  function guestBlocked(action: 'save-play' | 'save-all' | 'new-play' | 'sync') {
+    if (!saveNeedsAccount(book.guest, action)) return false
+    setSheet(null)
+    setSavePrompt(true)
+    return true
+  }
+
   function startNew() {
+    if (book.plays.length > 0 && guestBlocked('new-play')) return
     void book.create('11v11').then(() => {
       setSelectedPlayerId(null)
       setSelectedStrokeId(null)
@@ -136,6 +166,7 @@ export function App() {
   }
 
   const selected = play?.players.find((player) => player.id === selectedPlayerId) ?? null
+  const showWelcome = welcomeOn && !book.accountName
 
   if (!book.ready) {
     return (
@@ -158,10 +189,26 @@ export function App() {
         <button type="button" class="primary ghost" onClick={() => fileRef.current?.click()}>
           Open a saved play
         </button>
-        <button type="button" class="text-btn" onClick={() => setSheet('account')}>
+        {book.guest && !showWelcome ? (
+          <button type="button" class="guest-chip" onClick={() => openAccount('up')}>
+            Guest — make a free account to save
+          </button>
+        ) : null}
+        <button type="button" class="text-btn" onClick={() => openAccount('in')}>
           {book.accountName ?? 'Sign in'}
         </button>
-        {sheet === 'account' ? <AccountSheet saved={book.saved} onClose={() => setSheet(null)} /> : null}
+        {sheet === 'account' ? (
+          <AccountSheet
+            saved={book.saved}
+            start={accountMode}
+            phonePlays={book.plays.length}
+            onClose={() => setSheet(null)}
+          />
+        ) : null}
+        {savePrompt ? <GuestSavePrompt onCreate={() => openAccount('up')} onClose={() => setSavePrompt(false)} /> : null}
+        {showWelcome ? (
+          <WelcomeCard onCreate={() => openAccount('up')} onTry={tryFirst} onSignIn={() => openAccount('in')} />
+        ) : null}
         <input
           ref={fileRef}
           class="file"
@@ -216,7 +263,7 @@ export function App() {
               <span class="brand">Night Yard</span>
               <span class="play-title">{play.name}</span>
             </button>
-            <button type="button" class="text-btn account-btn" onClick={() => setSheet('account')}>
+            <button type="button" class="text-btn account-btn" onClick={() => openAccount('in')}>
               {book.accountName ?? 'Sign in'}
             </button>
             <button type="button" class="text-btn setup-btn" onClick={() => setSheet('play')}>
@@ -234,6 +281,11 @@ export function App() {
           <p class="sub">
             {play.formation} · {formatShort(play.format)} · Start on {ballLabel(play.los)}
           </p>
+          {book.guest && !showWelcome ? (
+            <button type="button" class="guest-chip" onClick={() => openAccount('up')}>
+              Guest — make a free account to save
+            </button>
+          ) : null}
           {book.syncStatus ? (
             <p class="sync-line" aria-live="polite">
               {book.syncStatus}
@@ -455,17 +507,30 @@ export function App() {
           onToggleAssignments={() => setIncludeAssignments((value) => !value)}
           onPng={exportPng}
           onJsonPlay={() => {
+            if (guestBlocked('save-play')) return
             downloadText(`${slug(play.name)}.json`, serializePlay(play))
             book.notify('Play file saved')
           }}
           onJsonBook={() => {
+            if (guestBlocked('save-all')) return
             downloadText(`${slug(book.bookName)}.json`, serializePlaybook(book.bookName, book.plays))
             book.notify('All plays saved')
           }}
           onClose={() => setSheet(null)}
         />
       ) : null}
-      {sheet === 'account' ? <AccountSheet saved={book.saved} onClose={() => setSheet(null)} /> : null}
+      {sheet === 'account' ? (
+        <AccountSheet
+          saved={book.saved}
+          start={accountMode}
+          phonePlays={book.plays.length}
+          onClose={() => setSheet(null)}
+        />
+      ) : null}
+      {savePrompt ? <GuestSavePrompt onCreate={() => openAccount('up')} onClose={() => setSavePrompt(false)} /> : null}
+      {showWelcome ? (
+        <WelcomeCard onCreate={() => openAccount('up')} onTry={tryFirst} onSignIn={() => openAccount('in')} />
+      ) : null}
       <input
         ref={fileRef}
         class="file"

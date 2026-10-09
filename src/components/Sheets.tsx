@@ -367,7 +367,7 @@ export function MoreSheet(props: {
       <button type="button" class="row-btn danger" onClick={props.onDelete}>
         Erase this play
       </button>
-      <p class="fine">Plays stay on this phone. If you erase one, tap Undo.</p>
+      <p class="fine">A free account saves plays on every device. Plays already on this phone stay here. If you erase one, tap Undo.</p>
     </Sheet>
   )
 }

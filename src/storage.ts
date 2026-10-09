@@ -1,3 +1,4 @@
+import { hasLegacyBook } from './guest'
 import { showcasePlay, sanitizePlay } from './play'
 import type { Play } from './types'
 
@@ -55,7 +56,13 @@ export async function resetStorageForTests(): Promise<void> {
   dbPromise = null
 }
 
-export async function loadPlaybook(): Promise<{ name: string; plays: Play[] }> {
+export async function loadPlaybook(): Promise<{
+  name: string
+  plays: Play[]
+  freshSeed: { id: string; updatedAt: number } | null
+  /** True when this phone already had a book. Those plays stay on the phone. */
+  legacy: boolean
+}> {
   const db = await openDb()
   const playTx = db.transaction('plays', 'readonly')
   const rawPlays = await requestToPromise(playTx.objectStore('plays').getAll())
@@ -65,13 +72,17 @@ export async function loadPlaybook(): Promise<{ name: string; plays: Play[] }> {
     .map((item) => sanitizePlay(item))
     .filter((play): play is Play => play !== null)
     .sort((a, b) => b.updatedAt - a.updatedAt)
-  if (plays.length === 0 && !meta?.seeded) {
+  const legacy = hasLegacyBook(plays.length, Boolean(meta?.seeded))
+  if (!legacy) {
     const starter = showcasePlay()
-    await savePlay(starter)
-    await savePlaybookName('Night Yard', true)
-    return { name: 'Night Yard', plays: [starter] }
+    return {
+      name: 'Night Yard',
+      plays: [starter],
+      freshSeed: { id: starter.id, updatedAt: starter.updatedAt },
+      legacy: false,
+    }
   }
-  return { name: meta?.name || 'Night Yard', plays }
+  return { name: meta?.name || 'Night Yard', plays, freshSeed: null, legacy: true }
 }
 
 export async function savePlay(play: Play): Promise<void> {

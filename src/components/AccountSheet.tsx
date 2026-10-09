@@ -6,8 +6,13 @@ import { Sheet } from './Sheets'
 
 type Mode = 'in' | 'up' | 'password'
 
-export function AccountSheet(props: { onClose: () => void; saved: boolean }) {
-  const [mode, setMode] = useState<Mode>('in')
+export function AccountSheet(props: {
+  onClose: () => void
+  saved: boolean
+  start?: Mode
+  phonePlays?: number
+}) {
+  const [mode, setMode] = useState<Mode>(props.start ?? 'in')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -75,7 +80,7 @@ export function AccountSheet(props: { onClose: () => void; saved: boolean }) {
     )
   }
 
-  const title = account.signedIn ? 'Change password' : mode === 'up' ? 'Make an account' : 'Sign in'
+  const title = account.signedIn ? 'Change password' : mode === 'up' ? 'Make a free account' : 'Sign in'
   return (
     <Sheet title={title} onClose={props.onClose}>
       <form class="stack" onSubmit={submit}>
@@ -116,11 +121,13 @@ export function AccountSheet(props: { onClose: () => void; saved: boolean }) {
           <p class="fine">
             {account.signedIn
               ? 'Use 8 or more letters or numbers.'
-              : 'Your plays stay on this phone, and on any phone where you sign in.'}
+              : mode === 'up' && (props.phonePlays ?? 0) > 0
+                ? 'Plays on this phone will be saved to your account.'
+                : 'Your plays stay on this phone, and on any phone where you sign in.'}
           </p>
         )}
         <button type="submit" class="primary wide" disabled={busy}>
-          {busy ? 'One moment…' : account.signedIn ? 'Save password' : mode === 'up' ? 'Make account' : 'Sign in'}
+          {busy ? 'One moment…' : account.signedIn ? 'Save password' : mode === 'up' ? 'Make free account' : 'Sign in'}
         </button>
       </form>
       {account.signedIn ? (
@@ -133,7 +140,7 @@ export function AccountSheet(props: { onClose: () => void; saved: boolean }) {
         </button>
       ) : (
         <button type="button" class="text-btn" onClick={() => { resetError(); setMode('up') }}>
-          New here? Make an account
+          New here? Make a free account
         </button>
       )}
     </Sheet>
