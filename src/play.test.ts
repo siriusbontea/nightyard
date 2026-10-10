@@ -108,7 +108,7 @@ describe('play model', () => {
     expect(play.players.filter((player) => player.side === 'defense')).toHaveLength(11)
     expect(play.players.filter((player) => player.side === 'offense').every((player) => player.color === OUR_COLOR)).toBe(true)
     expect(play.players.filter((player) => player.side === 'defense').every((player) => player.color === THEIR_COLOR)).toBe(true)
-    const x = play.players.find((player) => player.label === 'X')!
+    const x = play.players.find((player) => player.label === 'WR2')!
     expect(x.read).toBe(1)
     expect(play.strokes.some((stroke) => stroke.playerId === x.id && stroke.kind === 'motion')).toBe(true)
     expect(play.strokes.some((stroke) => stroke.preset === 'corner')).toBe(true)
@@ -132,10 +132,10 @@ describe('play model', () => {
 
   it('shows the path already on a player, and previews the same line the field draws', () => {
     const play = showcasePlay()
-    const x = play.players.find((player) => player.label === 'X')!
+    const x = play.players.find((player) => player.label === 'WR2')!
     expect(presetOnPlayer(play, x.id)).toBe('motion')
     const fresh = createPlay({ format: '11v11', formationId: 'shotgun-trips' })
-    const y = fresh.players.find((player) => player.label === 'Y')!
+    const y = fresh.players.find((player) => player.label === 'WR2')!
     const withMotion = applyPreset(fresh, y.id, 'motion')
     const next = applyPreset(withMotion, y.id, 'wheel')
     const drawn = next.strokes.find((stroke) => stroke.preset === 'wheel')!
@@ -146,7 +146,7 @@ describe('play model', () => {
 
   it('puts this play back to how it started and leaves the other plays alone', () => {
     const start = showcasePlay()
-    const player = start.players.find((item) => item.label === 'X')!
+    const player = start.players.find((item) => item.label === 'WR2')!
     const edited = translatePlayer({ ...start, los: 20, name: 'Moved' }, player.id, player.x + 3, player.y - 1)
     const restored = resetPlay(edited)
     expect(restored.id).toBe(start.id)
@@ -158,7 +158,7 @@ describe('play model', () => {
     expect(restored.players.filter((item) => item.side === 'defense').every((item) => item.color === THEIR_COLOR)).toBe(true)
     expect(restored.strokes.some((stroke) => stroke.kind === 'motion')).toBe(true)
     expect(restored.strokes.some((stroke) => stroke.preset === 'corner')).toBe(true)
-    expect(restored.players.find((item) => item.label === 'X')?.x).toBeCloseTo(player.x)
+    expect(restored.players.find((item) => item.label === 'WR2')?.x).toBeCloseTo(player.x)
     const other = createPlay({ format: '5v5', formationId: 'doubles', name: 'Flag mesh' })
     const book = [restored, other]
     expect(book[1]).toBe(other)
@@ -187,7 +187,7 @@ describe('play model', () => {
 
   it('renames, moves a player with their route, and undoes both', () => {
     let history = createHistory(createPlay({ format: '5v5', formationId: 'doubles', name: 'Mesh' }))
-    const player = history.present.players.find((item) => item.label === 'X')!
+    const player = history.present.players.find((item) => item.label === 'WR1')!
     history = commit(history, applyPreset(history.present, player.id, 'slant'))
     const renamed = commit(history, renamePlay(history.present, 'Mesh Left'))
     expect(renamed.present.name).toBe('Mesh Left')
@@ -202,7 +202,7 @@ describe('play model', () => {
 
   it('replaces a route of the same kind and resets personnel on a new format', () => {
     const play = showcasePlay()
-    const z = play.players.find((player) => player.label === 'Z')!
+    const z = play.players.find((player) => player.label === 'WR1')!
     const next = applyPreset(play, z.id, 'go')
     const zRoutes = next.strokes.filter((stroke) => stroke.playerId === z.id && stroke.kind === 'route')
     expect(zRoutes).toHaveLength(1)
@@ -246,11 +246,11 @@ describe('play model', () => {
 
   it('describes assignments from the route, then prefers a written note', () => {
     const play = showcasePlay()
-    const z = play.players.find((player) => player.label === 'Z')!
+    const z = play.players.find((player) => player.label === 'WR1')!
     expect(describeAssignment(z, play.strokes)).toMatch(/go/i)
     const noted = { ...z, note: 'Sit if the flat is taken' }
     expect(describeAssignment(noted, play.strokes)).toContain('Sit if the flat is taken')
-    expect(assignmentRows(play).some((row) => row.label === 'X' && /motion/i.test(row.detail))).toBe(true)
+    expect(assignmentRows(play).some((row) => row.label === 'WR2' && /motion/i.test(row.detail))).toBe(true)
   })
 
   it('keeps a saved line and puts a missing line on the 30', () => {
@@ -319,7 +319,7 @@ describe('playback', () => {
     role: 'wr',
     side: 'offense',
     x: 10,
-    y: 0,
+    y: -6,
     color: '#f0c14a',
     routeColor: '#38bdf8',
     shape: 'circle',
@@ -333,36 +333,36 @@ describe('playback', () => {
 
   it('runs motion before the snap, then the route from the motion spot', () => {
     const motion = line('m', 'motion', [
-      { x: 10, y: 0 },
-      { x: 16, y: 0 },
+      { x: 10, y: -6 },
+      { x: 16, y: -6 },
     ])
     const route = line('r', 'route', [
-      { x: 16, y: 0 },
-      { x: 16, y: 10 },
+      { x: 16, y: -6 },
+      { x: 16, y: 4 },
     ])
-    expect(playerAtTime(player, [motion, route], 0)).toEqual({ x: 10, y: 0 })
+    expect(playerAtTime(player, [motion, route], 0)).toEqual({ x: 10, y: -6 })
     const atSnap = playerAtTime(player, [motion, route], MOTION_SPLIT)
     expect(atSnap.x).toBeCloseTo(16, 0)
-    expect(atSnap.y).toBeCloseTo(0, 0)
+    expect(atSnap.y).toBeCloseTo(-6, 0)
     const done = playerAtTime(player, [motion, route], 1)
     expect(done.x).toBeCloseTo(16, 0)
-    expect(done.y).toBeCloseTo(10, 0)
+    expect(done.y).toBeCloseTo(4, 0)
   })
 
   it('follows a lone route across the whole timeline', () => {
-    const route = line('r', 'route', presetPath('go', { x: 10, y: 0 }, 1).points)
-    expect(playerAtTime(player, [route], 0)).toEqual({ x: 10, y: 0 })
-    expect(playerAtTime(player, [route], 1).y).toBeCloseTo(15, 0)
+    const route = line('r', 'route', presetPath('go', { x: 10, y: -6 }, 1).points)
+    expect(playerAtTime(player, [route], 0)).toEqual({ x: 10, y: -6 })
+    expect(playerAtTime(player, [route], 1).y).toBeCloseTo(9, 0)
   })
 
   it('bridges a route that still starts on the alignment after motion', () => {
     const motion = line('m', 'motion', [
-      { x: 10, y: 0 },
-      { x: 16, y: 0 },
+      { x: 10, y: -6 },
+      { x: 16, y: -6 },
     ])
     const route = line('r', 'route', [
-      { x: 10, y: 0 },
-      { x: 10, y: 12 },
+      { x: 10, y: -6 },
+      { x: 10, y: 6 },
     ])
     const justAfter = playerAtTime(player, [motion, route], MOTION_SPLIT + 0.01)
     expect(justAfter.x).toBeGreaterThan(14)
@@ -383,7 +383,7 @@ describe('playback', () => {
 
   it('keeps jet motion when the route after it changes', () => {
     const play = showcasePlay()
-    const x = play.players.find((player) => player.label === 'X')!
+    const x = play.players.find((player) => player.label === 'WR2')!
     const next = applyPreset(play, x.id, 'slant', 'left')
     expect(next.strokes.filter((stroke) => stroke.playerId === x.id && stroke.kind === 'motion')).toHaveLength(1)
     const slant = mainStroke(next, x.id)!
@@ -393,14 +393,14 @@ describe('playback', () => {
 
   it('mirrors one player and the whole play, and leaves a go route straight', () => {
     const play = createPlay({ format: '11v11', formationId: 'shotgun-trips', name: 'Stick' })
-    const y = play.players.find((player) => player.label === 'Y')!
+    const y = play.players.find((player) => player.label === 'WR2')!
     const withSlant = applyPreset(play, y.id, 'slant', 'right')
     const flipped = mirrorPlayerRoutes(withSlant, y.id)
     const before = mainStroke(withSlant, y.id)!
     const after = mainStroke(flipped, y.id)!
     expect(after.points.at(-1)!.x).toBeLessThan(before.points[0].x)
     expect(after.points[0].x).toBeCloseTo(y.x)
-    const z = play.players.find((player) => player.label === 'Z')!
+    const z = play.players.find((player) => player.label === 'WR1')!
     const withGo = applyPreset(play, z.id, 'go')
     const stillGo = mirrorPlayerRoutes(withGo, z.id)
     expect(mainStroke(stillGo, z.id)!.points[1].x).toBeCloseTo(z.x)

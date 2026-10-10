@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'preact/hooks'
 import { applyPositions, fieldMarkup } from '../fieldMarkup'
-import { DRAW_PIXELS, FIELD_WIDTH, clamp, dist, moveStrokePoint, setStrokeCurve, simplifyPath, viewSize, type Camera } from '../geometry'
+import { DRAW_PIXELS, FIELD_WIDTH, clamp, dist, moveStrokePoint, plantedMarker, setStrokeCurve, simplifyPath, viewSize, type Camera } from '../geometry'
 import { clientToField, hitTest } from '../hit'
 import { playerAtTime } from '../playback'
 import { replaceMainStroke, replaceStroke, setStroke, translatePlayer } from '../play'
@@ -169,12 +169,13 @@ export function Field(props: FieldProps) {
       if (hit.type === 'player' && (current.tool === 'draw' || current.redrawPlayerId === hit.id)) {
         const player = current.play.players.find((item) => item.id === hit.id)
         if (!player) return
+        const home = plantedMarker(player)
         gesturing.current = true
         active = {
           type: 'draw',
           playerId: player.id,
           kind: current.redrawPlayerId === player.id ? 'route' : current.strokeKind,
-          raw: [{ x: player.x, y: player.y }],
+          raw: [{ x: home.x, y: home.y }],
           pointerId: event.pointerId,
           snapshot: current.play,
           moved: false,
@@ -274,7 +275,8 @@ export function Field(props: FieldProps) {
           paint(finished.snapshot, false, 0)
           return
         }
-        simple.points[0] = { x: player.x, y: player.y }
+        const home = plantedMarker(player)
+        simple.points[0] = { x: home.x, y: home.y }
         const stroke: Stroke = {
           id: uid(),
           playerId: player.id,

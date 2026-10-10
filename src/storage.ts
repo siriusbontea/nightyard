@@ -1,5 +1,5 @@
 import { hasLegacyBook } from './guest'
-import { showcasePlay, sanitizePlay } from './play'
+import { emptyBookStarters, sanitizePlay } from './play'
 import { newBookId, placeUnbookedPlays, playbookName, sanitizePlaybook } from './playbooks'
 import type { Play, Playbook } from './types'
 
@@ -86,16 +86,16 @@ export async function loadPlaybook(): Promise<{
     .filter((book): book is Playbook => book !== null)
   const legacy = hasLegacyBook(plays.length, Boolean(meta?.seeded) || books.length > 0)
   if (!legacy) {
-    const starter = showcasePlay()
     const bookId = newBookId()
-    starter.bookId = bookId
-    const book: Playbook = { id: bookId, name: 'Night Yard', updatedAt: starter.updatedAt, data: { migrated: true } }
+    const starters = emptyBookStarters()
+    for (const play of starters.plays) play.bookId = bookId
+    const book: Playbook = { id: bookId, name: 'Night Yard', updatedAt: starters.seed.updatedAt, data: { migrated: true } }
     return {
       name: book.name,
-      plays: [starter],
+      plays: starters.plays.sort((a, b) => b.updatedAt - a.updatedAt),
       books: [book],
       currentId: bookId,
-      freshSeed: { id: starter.id, updatedAt: starter.updatedAt },
+      freshSeed: { id: starters.seed.id, updatedAt: starters.seed.updatedAt },
       legacy: false,
       namedAt: 0,
     }

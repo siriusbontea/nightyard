@@ -1,4 +1,4 @@
-import { dist, distanceToStroke } from './geometry'
+import { displayStroke, dist, distanceToStroke, plantedMarker } from './geometry'
 import { isPlayerShown } from './play'
 import type { Play, Point } from './types'
 
@@ -19,7 +19,7 @@ export function hitTest(
   let nearestPlayer: { id: string; distance: number } | null = null
   for (const player of play.players) {
     if (!isPlayerShown(play, player)) continue
-    const distance = dist(point, player)
+    const distance = dist(point, plantedMarker(player))
     if (distance <= radii.player && (!nearestPlayer || distance < nearestPlayer.distance)) {
       nearestPlayer = { id: player.id, distance }
     }
@@ -30,7 +30,7 @@ export function hitTest(
   for (const stroke of play.strokes) {
     const owner = play.players.find((player) => player.id === stroke.playerId)
     if (!owner || !isPlayerShown(play, owner)) continue
-    const distance = distanceToStroke(stroke, point)
+    const distance = distanceToStroke(displayStroke(stroke, play.players), point)
     if (distance <= radii.stroke && (!nearestStroke || distance < nearestStroke.distance)) {
       nearestStroke = { id: stroke.id, distance }
     }
@@ -40,8 +40,9 @@ export function hitTest(
 }
 
 function nearestHandle(play: Play, point: Point, radius: number, strokeId: string | null): Hit | null {
-  const stroke = play.strokes.find((item) => item.id === strokeId)
-  if (!stroke) return null
+  const stored = play.strokes.find((item) => item.id === strokeId)
+  if (!stored) return null
+  const stroke = displayStroke(stored, play.players)
   let bestDistance = radius
   let bestHit: Hit | null = null
   const consider = (distance: number, hit: Hit) => {

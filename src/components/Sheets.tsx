@@ -223,7 +223,7 @@ export function PresetSheet(props: {
   const [picked, setPicked] = useState<{ playerId: string; preset: PresetId } | null>(null)
   const fromPlay = selected ? presetOnPlayer(props.play, selected.id) : null
   const highlighted = selected && picked?.playerId === selected.id ? picked.preset : fromPlay
-  const jobs = selected ? assignmentsFor(selected, Boolean(formationById(props.play.format, props.play.formationId).special)) : []
+  const jobs = selected ? assignmentsFor(selected, Boolean(formationById(props.play.format, props.play.formationId).special), props.play.format) : []
   const targets = selected ? props.play.players.filter((player) => player.side !== selected.side && (player.side === ourSideOf(props.play) || props.play.showDefense)) : []
   const hasLine = selected ? props.play.strokes.some((stroke) => stroke.playerId === selected.id) : false
   return (
@@ -256,7 +256,7 @@ export function PresetSheet(props: {
           </div>
           {hasLine ? (
             <div class="route-options">
-              {selected.side === 'defense' ? null : (
+              {selected.side === 'defense' || props.play.format !== '11v11' ? null : (
                 <button type="button" onClick={() => props.onApply(selected.id, 'block')}>
                   Block
                 </button>

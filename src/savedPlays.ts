@@ -1,4 +1,4 @@
-import { FIELD_WIDTH } from './geometry'
+import { FIELD_WIDTH, displayStroke, plantedMarker } from './geometry'
 import { pb } from './pb'
 import { isPlayerShown, sanitizePlay } from './play'
 import { remoteRow } from './syncMerge'
@@ -52,11 +52,12 @@ export function playThumb(play: Play): string {
   for (const stroke of play.strokes) {
     const owner = play.players.find((player) => player.id === stroke.playerId)
     if (!owner || !isPlayerShown(play, owner)) continue
-    parts.push(`<path d="${strokePath(stroke, sx, sy)}" fill="none" stroke="${owner.routeColor}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`)
+    parts.push(`<path d="${strokePath(displayStroke(stroke, play.players), sx, sy)}" fill="none" stroke="${owner.routeColor}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>`)
   }
   for (const player of play.players) {
     if (!isPlayerShown(play, player)) continue
-    parts.push(`<circle cx="${sx(player.x)}" cy="${sy(player.y)}" r="${(1.5 * scale).toFixed(1)}" fill="${player.color}"/>`)
+    const at = plantedMarker(player)
+    parts.push(`<circle cx="${sx(at.x)}" cy="${sy(at.y)}" r="${(1.5 * scale).toFixed(1)}" fill="${player.color}"/>`)
   }
   parts.push('</svg>')
   return parts.join('')

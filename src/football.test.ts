@@ -11,7 +11,7 @@ const FLAG: FormatId[] = ['5v5', '6v6', '7v7', '8v8', '9v9']
 const SCRIMMAGE = ['trips-bunch', 'shotgun-trips', 'ace', 'i-form', 'punt', 'field-goal']
 
 function onTheLine(y: number): boolean {
-  return y > -0.85 && y < 0.5
+  return Math.abs(y + PLAYER_R) < 0.35
 }
 
 describe('football alignments', () => {
@@ -73,20 +73,22 @@ describe('football alignments', () => {
 
   it('makes the bunch and the I formation legal, and drops the shotgun slot off the line', () => {
     const bunch = createPlay({ format: '11v11', formationId: 'trips-bunch' })
-    expect(bunch.players.find((player) => player.label === 'Y')!.y).toBeLessThan(-0.85)
     expect(bunch.players.find((player) => player.label === 'TE')!.y).toBeLessThan(-0.85)
-    expect(onTheLine(bunch.players.find((player) => player.label === 'X')!.y)).toBe(true)
+    expect(bunch.players.find((player) => player.label === 'TE2')!.y).toBeLessThan(-0.85)
+    expect(onTheLine(bunch.players.find((player) => player.label === 'WR2')!.y)).toBe(true)
     const gun = createPlay({ format: '11v11', formationId: 'shotgun-trips' })
-    expect(gun.players.find((player) => player.label === 'Y')!.y).toBeLessThan(-0.85)
+    expect(gun.players.find((player) => player.label === 'WR2')!.y).toBeLessThan(-0.85)
     const eye = createPlay({ format: '11v11', formationId: 'i-form' })
     const qb = eye.players.find((player) => player.label === 'QB')!
-    expect(qb.y).toBeGreaterThan(-2.5)
-    expect(qb.y).toBeLessThan(-1)
-    expect(eye.players.find((player) => player.label === 'Z')!.y).toBeLessThan(-0.85)
+    const center = eye.players.find((player) => player.label === 'C')!
+    expect(qb.x).toBeCloseTo(center.x)
+    expect(qb.y).toBeCloseTo(-5.41, 1)
+    expect(qb.y).toBeLessThan(center.y - PLAYER_R)
+    expect(eye.players.find((player) => player.label === 'WR2')!.y).toBeLessThan(-0.85)
     expect(onTheLine(eye.players.find((player) => player.label === 'TE')!.y)).toBe(true)
     const corn = showcasePlay()
-    expect(corn.players.find((player) => player.label === 'Y' && player.side === 'offense')!.y).toBeLessThan(-0.85)
-    expect(corn.players.find((player) => player.label === 'TE')!.y).toBeLessThan(-0.85)
+    expect(corn.players.find((player) => player.label === 'TE' && player.side === 'offense')!.y).toBeLessThan(-0.85)
+    expect(corn.players.find((player) => player.label === 'TE2')!.y).toBeLessThan(-0.85)
     const shovel = corn.strokes.find((stroke) => stroke.preset === 'run')!
     expect(shovel.points.at(-1)!.y).toBeGreaterThan(0)
   })
@@ -107,7 +109,7 @@ describe('football alignments', () => {
 
   it('offers routes only to offense, rushes first to linemen, and kicking jobs on a kicking play', () => {
     const play = createPlay({ format: '11v11', formationId: 'shotgun-trips' })
-    const wr = play.players.find((player) => player.label === 'X')!
+    const wr = play.players.find((player) => player.label === 'WR1')!
     const shown = setOurSide(setOurSide(play, 'defense'), 'offense')
     const dl = shown.players.find((player) => player.role === 'dl')!
     expect(assignmentsFor(wr).map((job) => job.id)).toContain('slant')
@@ -147,11 +149,40 @@ describe('football alignments', () => {
     const cover = setOurSide(createPlay({ format: '11v11', formationId: 'shotgun-trips' }), 'defense')
     const byLabel = Object.fromEntries(cover.players.map((player) => [player.label, player.id]))
     const presetOf = (label: string) => cover.strokes.find((stroke) => stroke.playerId === byLabel[label])?.preset
-    expect(presetOf('LC')).toBe('zone-third')
-    expect(presetOf('RC')).toBe('zone-third')
+    expect(presetOf('CB1')).toBe('zone-third')
+    expect(presetOf('CB2')).toBe('zone-third')
     expect(presetOf('FS')).toBe('zone-middle')
     expect(presetOf('SS')).toBe('zone-hook')
     expect(cover.strokes.some((stroke) => stroke.preset === 'zone-half')).toBe(false)
-    expect(presetOf('E')).toBe('blitz-edge')
+    expect(presetOf('DE1')).toBe('blitz-edge')
+  })
+
+  it('hides Block on flag, uses a 12-yard break in tackle, and lines kickoff five and five', () => {
+    const flag = createPlay({ format: '5v5', formationId: 'doubles' })
+    const skill = flag.players.find((player) => player.role === 'wr')!
+    const jobs = assignmentsFor(skill, false, '5v5').map((job) => job.id)
+    expect(jobs).not.toContain('block')
+    expect(jobs).toContain('slant')
+    expect(assignmentsFor(skill).map((job) => job.id)).toContain('block')
+    const dig = presetPath('in', { x: 0, y: 0 }, 1)
+    const flagDig = presetPath('in', { x: 0, y: 0 }, 1, '5v5')
+    expect(dig.points[1].y).toBeCloseTo(12)
+    expect(flagDig.points[1].y).toBeCloseTo(10)
+    expect(presetPath('post', { x: 0, y: 0 }, 1).points[1].y).toBeCloseTo(12)
+    expect(presetPath('corner', { x: 0, y: 0 }, 1, '7v7').points[1].y).toBeCloseTo(10)
+    const kick = createPlay({ format: '11v11', formationId: 'kickoff' })
+    const kicker = kick.players.find((player) => player.label === 'K')!
+    const left = kick.players.filter((player) => player.label !== 'K' && player.x < kicker.x)
+    const right = kick.players.filter((player) => player.label !== 'K' && player.x > kicker.x)
+    expect(left).toHaveLength(5)
+    expect(right).toHaveLength(5)
+    const banned = new Set(['$', 'J', 'E', 'N', 'T', 'W', 'M', 'X', 'Y', 'Z'])
+    for (const format of FORMATS) {
+      for (const formation of formationsFor(format.id)) {
+        const play = createPlay({ format: format.id, formationId: formation.id })
+        for (const player of play.players) expect(banned.has(player.label), `${formation.id} ${player.label}`).toBe(false)
+      }
+      for (const player of defenseFor(format.id)) expect(banned.has(player.label), player.label).toBe(false)
+    }
   })
 })

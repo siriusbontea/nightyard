@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { commit, createHistory, redo, undo, canRedo, canUndo, type History } from './history'
 import { isGuest } from './guest'
-import { createPlay, duplicatePlay, parseBundle, renamePlay, resetPlay, sanitizePlay, showcasePlay } from './play'
+import { createPlay, duplicatePlay, emptyBookStarters, parseBundle, renamePlay, resetPlay, sanitizePlay } from './play'
 import { adoptOwnerBook, copyName, emptyPlaybook, movePlay, playsInBook, renamePlaybook } from './playbooks'
 import { deletePlay, deletePlaybookRecord, loadPlaybook, saveCurrentBookId, savePlay, savePlaybookName, savePlaybookRecord } from './storage'
 import {
@@ -267,24 +267,25 @@ export function usePlaybook() {
       })
       .catch(() => {
         if (cancel) return
-        const starter = showcasePlay()
         const book = emptyPlaybook('Night Yard')
-        starter.bookId = book.id
-        const opened = createHistory(starter)
-        playsRef.current = [starter]
+        const starters = emptyBookStarters()
+        for (const play of starters.plays) play.bookId = book.id
+        const opened = createHistory(starters.seed)
+        const seeded = starters.plays.sort((a, b) => b.updatedAt - a.updatedAt)
+        playsRef.current = seeded
         booksRef.current = [book]
         currentIdRef.current = book.id
         mirrorIdRef.current = book.id
         accountNameRef.current = book.name
         historyRef.current = opened
-        setPlays([starter])
+        setPlays(seeded)
         setBooks([book])
         setCurrentId(book.id)
         setBookName(book.name)
         setHistory(opened)
         memoryOnlyRef.current = true
         setMemoryOnly(true)
-        setFreshSeed({ id: starter.id, updatedAt: starter.updatedAt })
+        setFreshSeed({ id: starters.seed.id, updatedAt: starters.seed.updatedAt })
         setToast("Can't save on this phone. Use More, then Save a file.")
         setReady(true)
         start()

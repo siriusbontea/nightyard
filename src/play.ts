@@ -1,7 +1,8 @@
 import { categoryOf } from './categories'
 import { DEFAULT_LOS, HASH_INSET } from './fieldMarks'
 import { OUR_COLOR, THEIR_COLOR, defenseFor, formationById, offenseFor, playerFromSpot, routeColorAt, shapeFor, specialDefense, type Spot } from './formations'
-import { FIELD_WIDTH, insideDir, pointOnStroke } from './geometry'
+import { FIELD_WIDTH, PLAYER_R, insideDir, pointOnStroke } from './geometry'
+import { migrateBuiltinLabels } from './labels'
 import { canRedo, canUndo, commit, createHistory, redo, undo, type History } from './history'
 import { uid } from './id'
 import { playerAtTime } from './playback'
@@ -41,7 +42,7 @@ export function createPlay(options: {
     createdAt: now,
     updatedAt: now,
   }
-  if (formation.special) play.strokes = jobStrokes(players, formation.spots, ballXOf(play))
+  if (formation.special) play.strokes = jobStrokes(players, formation.spots, ballXOf(play), play.format)
   return rememberStart(play)
 }
 
@@ -88,21 +89,24 @@ function drawn(playerId: string, kind: StrokeKind, preset: PresetId | null, poin
 /** Goal-line bunch. A fresh book starts here. New play uses the 30. A book that already has plays is left alone. */
 export function corndogPlay(name = 'Corndog'): Play {
   const ball = FIELD_WIDTH - HASH_INSET
+  const line = -PLAYER_R
+  const offLine = -PLAYER_R - 1.2
+  const rush = PLAYER_R
   const play = createPlay({ format: '11v11', formationId: 'trips-bunch', name })
   play.los = 3
   play.showDefense = true
   play.notes = 'Outside man walks in, then cuts back to the pylon. Tight end bends to the corner. Back slips up for a shovel.'
   const offense = lined(
     [
-      { label: 'LT', role: 'ol', x: ball - 8.1, y: 0 },
-      { label: 'LG', role: 'ol', x: ball - 3.8, y: 0 },
-      { label: 'C', role: 'center', x: ball, y: -0.15 },
-      { label: 'RG', role: 'ol', x: ball + 3.6, y: 0 },
-      { label: 'RT', role: 'ol', x: ball + 6.9, y: 0 },
-      { label: 'Y', role: 'te', x: ball + 10.6, y: -1.1 },
-      { label: 'TE', role: 'te', x: ball + 14, y: -1 },
-      { label: 'X', role: 'wr', x: ball + 17.4, y: 0 },
-      { label: 'Z', role: 'wr', x: 6.4, y: 0 },
+      { label: 'LT', role: 'ol', x: ball - 8.1, y: line },
+      { label: 'LG', role: 'ol', x: ball - 3.8, y: line },
+      { label: 'C', role: 'center', x: ball, y: line },
+      { label: 'RG', role: 'ol', x: ball + 3.6, y: line },
+      { label: 'RT', role: 'ol', x: ball + 6.9, y: line },
+      { label: 'TE', role: 'te', x: ball + 10.6, y: offLine },
+      { label: 'TE2', role: 'te', x: ball + 14, y: offLine },
+      { label: 'WR2', role: 'wr', x: ball + 17.4, y: line },
+      { label: 'WR1', role: 'wr', x: 6.4, y: line },
       { label: 'QB', role: 'qb', x: ball, y: -5 },
       { label: 'RB', role: 'rb', x: ball + 3.5, y: -5.2 },
     ],
@@ -112,17 +116,17 @@ export function corndogPlay(name = 'Corndog'): Play {
   )
   const defense = lined(
     [
-      { label: 'E', role: 'dl', x: ball - 7.2, y: 1.05 },
-      { label: 'N', role: 'dl', x: ball - 2.4, y: 1.05 },
-      { label: 'T', role: 'dl', x: ball + 2.2, y: 1.05 },
-      { label: 'J', role: 'dl', x: ball + 6.6, y: 1.05 },
-      { label: 'W', role: 'lb', x: ball - 10.4, y: 2.5 },
-      { label: 'M', role: 'lb', x: ball, y: 4.4 },
-      { label: '$', role: 'lb', x: ball + 7.2, y: 4.5 },
-      { label: 'LC', role: 'db', x: 6.4, y: 1.7 },
+      { label: 'DE1', role: 'dl', x: ball - 7.2, y: rush },
+      { label: 'DT1', role: 'dl', x: ball - 2.4, y: rush },
+      { label: 'DT2', role: 'dl', x: ball + 2.2, y: rush },
+      { label: 'DE2', role: 'dl', x: ball + 6.6, y: rush },
+      { label: 'LB1', role: 'lb', x: ball - 10.4, y: 2.5 },
+      { label: 'LB2', role: 'lb', x: ball, y: 4.4 },
+      { label: 'LB3', role: 'lb', x: ball + 7.2, y: 4.5 },
+      { label: 'CB1', role: 'db', x: 6.4, y: 1.7 },
       { label: 'SS', role: 'db', x: ball + 10.6, y: 1.8 },
       { label: 'FS', role: 'db', x: ball + 3.2, y: 6.6 },
-      { label: 'RC', role: 'db', x: ball + 14.6, y: 1.75 },
+      { label: 'CB2', role: 'db', x: ball + 14.6, y: 1.75 },
     ],
     'defense',
     false,
@@ -130,13 +134,13 @@ export function corndogPlay(name = 'Corndog'): Play {
   )
   play.players = [...offense, ...defense]
   const byLabel = Object.fromEntries(play.players.map((player) => [player.label, player]))
-  byLabel.X.read = 1
-  byLabel.Y.read = 2
+  byLabel.WR2.read = 1
+  byLabel.TE.read = 2
   byLabel.RB.read = 3
-  const x = byLabel.X
-  const y = byLabel.Y
-  const tight = byLabel.TE
-  const z = byLabel.Z
+  const x = byLabel.WR2
+  const y = byLabel.TE
+  const tight = byLabel.TE2
+  const z = byLabel.WR1
   const back = byLabel.RB
   const snapX = x.x - 4.1
   play.strokes = [
@@ -179,6 +183,58 @@ export function corndogPlay(name = 'Corndog'): Play {
 
 export function showcasePlay(): Play {
   return corndogPlay()
+}
+
+/**
+ * Trips Stick for a brand-new book. The slot sits at six, the tight end flats,
+ * the outside man goes, the lone receiver slants, and the back swings to the trips.
+ */
+export function stickPlay(name = 'Stick'): Play {
+  const play = createPlay({ format: '11v11', formationId: 'shotgun-trips', name })
+  const byLabel = Object.fromEntries(play.players.map((player) => [player.label, player]))
+  const slot = byLabel.WR2
+  const tight = byLabel.TE
+  const outside = byLabel.WR3
+  const isolated = byLabel.WR1
+  const back = byLabel.RB
+  slot.read = 1
+  slot.note = 'Stick'
+  tight.read = 2
+  tight.note = 'Flat'
+  outside.read = 3
+  const slant = presetFromPlayer('slant', isolated, undefined, insideDir(isolated.x), ballXOf(play), play.format)
+  play.strokes = [
+    drawn(outside.id, 'route', 'go', [
+      { x: outside.x, y: outside.y },
+      { x: outside.x, y: outside.y + 15 },
+    ]),
+    drawn(slot.id, 'route', null, [
+      { x: slot.x, y: slot.y },
+      { x: slot.x, y: slot.y + 6 },
+      { x: slot.x + 0.5, y: slot.y + 5.1 },
+    ]),
+    drawn(tight.id, 'route', null, [
+      { x: tight.x, y: tight.y },
+      { x: tight.x + 0.3, y: tight.y + 1.4 },
+      { x: Math.min(FIELD_WIDTH - PLAYER_R, tight.x + 7), y: tight.y + 1.1 },
+    ]),
+    drawn(isolated.id, 'route', 'slant', slant.points),
+    drawn(back.id, 'route', null, [
+      { x: back.x, y: back.y },
+      { x: back.x + 3.5, y: back.y + 1.2 },
+      { x: back.x + 8, y: back.y + 4.5 },
+    ]),
+  ]
+  delete play.origin
+  return rememberStart(play)
+}
+
+/** Corndog opens first. Stick is the other starter, and only in an empty book. */
+export function emptyBookStarters(): { plays: Play[]; seed: Play } {
+  const stick = stickPlay()
+  const seed = showcasePlay()
+  seed.updatedAt = Math.max(seed.updatedAt, stick.updatedAt + 1)
+  return { plays: [seed, stick], seed }
 }
 
 export function duplicatePlay(play: Play): Play {
@@ -326,7 +382,7 @@ export function applyPreset(play: Play, playerId: string, preset: PresetId, side
   if (!player || preset === 'man') return play
   const ball = ballXOf(play)
   const sign = side ? insideSign(side) : player.side === 'defense' ? insideSign(player.x <= ball ? 'left' : 'right') : insideDir(player.x)
-  const stroke = makeStroke(uid(), playerId, preset, presetFromPlayer(preset, player, presetOrigin(play, playerId, preset), sign, ball))
+  const stroke = makeStroke(uid(), playerId, preset, presetFromPlayer(preset, player, presetOrigin(play, playerId, preset), sign, ball, play.format))
   return replaceMainStroke(play, stroke)
 }
 
@@ -369,7 +425,7 @@ export function defaultDefenseStrokes(play: Play): Stroke[] {
     if (play.strokes.some((stroke) => stroke.playerId === player.id)) continue
     const side: BreakSide = player.x <= ball ? 'left' : 'right'
     const preset = presetForDefender(player, ball)
-    strokes.push(makeStroke(uid(), player.id, preset, presetFromPlayer(preset, player, undefined, insideSign(side), ball)))
+    strokes.push(makeStroke(uid(), player.id, preset, presetFromPlayer(preset, player, undefined, insideSign(side), ball, play.format)))
   }
   return strokes
 }
@@ -415,13 +471,13 @@ export function isPlayerShown(play: Play, player: Player): boolean {
   return player.side === ourSideOf(play) || play.showDefense
 }
 
-function jobStrokes(players: Player[], spots: Spot[], ball: number): Stroke[] {
+function jobStrokes(players: Player[], spots: Spot[], ball: number, format: FormatId): Stroke[] {
   const strokes: Stroke[] = []
   players.forEach((player, index) => {
     const job = spots[index]?.job
     if (!job) return
     const sign = player.side === 'defense' ? insideSign(player.x <= ball ? 'left' : 'right') : insideDir(player.x)
-    strokes.push(makeStroke(uid(), player.id, job, presetFromPlayer(job, player, undefined, sign, ball)))
+    strokes.push(makeStroke(uid(), player.id, job, presetFromPlayer(job, player, undefined, sign, ball, format)))
   })
   return strokes
 }
@@ -431,8 +487,8 @@ function kickingStrokes(play: Play, templateId: string, offense: Player[], defen
   const ours = formationById(play.format, templateId).spots
   const theirs = specialDefense(templateId) ?? []
   return [
-    ...(includeOffense ? jobStrokes(offense, ours, ball) : []),
-    ...(includeDefense ? jobStrokes(defense, theirs, ball) : []),
+    ...(includeOffense ? jobStrokes(offense, ours, ball, play.format) : []),
+    ...(includeDefense ? jobStrokes(defense, theirs, ball, play.format) : []),
   ]
 }
 
@@ -482,7 +538,7 @@ export function setShowDefense(play: Play, show: boolean): Play {
   const next = { ...play, showDefense: true, players: [...play.players, ...extra] }
   if (template.special) {
     const spots = other === 'defense' ? (specialDefense(template.id) ?? []) : template.spots
-    const added = jobStrokes(extra, spots, ballXOf(next))
+    const added = jobStrokes(extra, spots, ballXOf(next), next.format)
     return { ...next, strokes: [...play.strokes, ...added] }
   }
   if (other !== 'defense') return next
@@ -607,6 +663,7 @@ export function sanitizePlay(input: unknown): Play | null {
   }
   const now = Date.now()
   const format = raw.format
+  const named = migrateBuiltinLabels(players, format)
   const formationId = typeof raw.formationId === 'string' ? raw.formationId : formationById(format, '').id
   const play: Play = {
     id: typeof raw.id === 'string' ? raw.id : uid(),
@@ -619,7 +676,7 @@ export function sanitizePlay(input: unknown): Play | null {
     notes: typeof raw.notes === 'string' ? raw.notes.slice(0, 600) : '',
     ourSide,
     showDefense: Boolean(raw.showDefense),
-    players,
+    players: named,
     strokes,
     createdAt: typeof raw.createdAt === 'number' ? raw.createdAt : now,
     updatedAt: typeof raw.updatedAt === 'number' ? raw.updatedAt : now,

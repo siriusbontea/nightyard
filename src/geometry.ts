@@ -1,10 +1,55 @@
 import { DEFAULT_LOS, END_ZONE_DEPTH, FIELD_LENGTH } from './fieldMarks'
-import type { Point, Stroke } from './types'
+import type { Point, Shape, Side, Stroke } from './types'
 
 /** American football field width in yards (160 feet). */
 export const FIELD_WIDTH = 160 / 3
 
 export const PLAYER_R = 1.62
+
+/** How far a mark reaches upfield from its center. Diamonds are a little taller. */
+export function markerReach(shape: Shape): number {
+  return shape === 'diamond' ? PLAYER_R * 1.2 : PLAYER_R
+}
+
+/**
+ * A mark whose body crosses the line of scrimmage sits just on its own side.
+ * Someone already clear of the line, or dragged well past it, stays where they are.
+ */
+export function plantedMarker(player: { x: number; y: number; side: Side; shape: Shape }): Point {
+  const reach = markerReach(player.shape)
+  if (player.side === 'defense') {
+    if (player.y < reach && player.y > -reach - 0.2) return { x: player.x, y: reach }
+    return { x: player.x, y: player.y }
+  }
+  if (player.y > -reach && player.y < reach + 0.2) return { x: player.x, y: -reach }
+  return { x: player.x, y: player.y }
+}
+
+type Alignable = { id: string; x: number; y: number; side: Side; shape: Shape }
+
+/** Start a line on the drawn mark when it was saved on the raw spot. */
+export function displayStroke(stroke: Stroke, players: readonly Alignable[]): Stroke {
+  if (stroke.preset === 'man' && stroke.coverId) {
+    const owner = players.find((item) => item.id === stroke.playerId)
+    const target = players.find((item) => item.id === stroke.coverId)
+    if (owner && target) {
+      return { ...stroke, points: [plantedMarker(owner), plantedMarker(target)], curves: [null] }
+    }
+  }
+  const owner = players.find((item) => item.id === stroke.playerId)
+  if (!owner || stroke.points.length === 0) return stroke
+  const start = stroke.points[0]
+  if (Math.hypot(start.x - owner.x, start.y - owner.y) > 0.35) return stroke
+  const planted = plantedMarker(owner)
+  const dx = planted.x - owner.x
+  const dy = planted.y - owner.y
+  if (Math.abs(dx) < 0.001 && Math.abs(dy) < 0.001) return stroke
+  return {
+    ...stroke,
+    points: stroke.points.map((point) => ({ x: point.x + dx, y: point.y + dy })),
+    curves: stroke.curves.map((curve) => (curve ? { x: curve.x + dx, y: curve.y + dy } : null)),
+  }
+}
 
 export interface Camera {
   /** Yards of field shown upfield of the line of scrimmage. */

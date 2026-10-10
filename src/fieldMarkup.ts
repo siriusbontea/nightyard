@@ -1,7 +1,7 @@
 import { ballMarkup } from './ball'
 import { COLOR_ART, END_ZONE_COLOR, END_ZONE_LINE, LINE_ART, placeEndZoneLogo } from './endZoneArt'
 import { END_ZONE_DEPTH, FIELD_LENGTH, HASH_INSET, displayedYard, fieldYAt, numberArrow } from './fieldMarks'
-import { FIELD_WIDTH, PLAYER_R, fieldToSvg, segmentTangent, viewSize, type Camera } from './geometry'
+import { FIELD_WIDTH, PLAYER_R, displayStroke, fieldToSvg, plantedMarker, segmentTangent, viewSize, type Camera } from './geometry'
 import { isPlayerShown } from './play'
 import { isZonePreset, zoneRadius } from './presets'
 import { ACCENT, type Theme } from './theme'
@@ -48,13 +48,7 @@ function arrowPath(tip: Point, dir: Point, size: number): string {
 }
 
 function routeMarkup(stroke: Stroke, play: Play, camera: Camera, theme: Theme, selected: boolean): string {
-  if (stroke.preset === 'man' && stroke.coverId) {
-    const owner = play.players.find((item) => item.id === stroke.playerId)
-    const target = play.players.find((item) => item.id === stroke.coverId)
-    if (owner && target) {
-      stroke = { ...stroke, points: [{ x: owner.x, y: owner.y }, { x: target.x, y: target.y }], curves: [null] }
-    }
-  }
+  stroke = displayStroke(stroke, play.players)
   if (stroke.points.length < 2) return ''
   const player = play.players.find((item) => item.id === stroke.playerId)
   const color = theme.outlineOnly ? '#111111' : safeColor(player?.routeColor || player?.color || '#38bdf8')
@@ -159,7 +153,7 @@ export function labelFontSize(label: string, radius: number, shape: Player['shap
 }
 
 function playerMarkup(player: Player, play: Play, camera: Camera, theme: Theme, selected: boolean): string {
-  const pos = fieldToSvg(player, camera)
+  const pos = fieldToSvg(plantedMarker(player), camera)
   const radius = PLAYER_R * camera.scale
   const fill = theme.outlineOnly ? '#ffffff' : safeColor(player.color)
   const stroke = theme.outlineOnly ? '#161616' : '#0c1220'
@@ -352,7 +346,7 @@ export function fieldMarkup(options: {
   }
   if (options.showHandles && options.selectedStrokeId) {
     const selected = play.strokes.find((stroke) => stroke.id === options.selectedStrokeId)
-    if (selected) parts.push(handlesMarkup(selected, camera))
+    if (selected) parts.push(handlesMarkup(displayStroke(selected, play.players), camera))
   }
   parts.push(`<rect x="1.2" y="1.2" width="${w - 2.4}" height="${h - 2.4}" fill="none" stroke="${theme.line}" stroke-width="2"/>`)
   parts.push('</g>')

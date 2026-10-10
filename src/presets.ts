@@ -1,5 +1,5 @@
 import { FIELD_WIDTH, insideDir } from './geometry'
-import type { Player, Point, PresetId, Stroke, StrokeKind } from './types'
+import type { FormatId, Player, Point, PresetId, Stroke, StrokeKind } from './types'
 
 type BreakSide = 'left' | 'right'
 
@@ -47,10 +47,13 @@ export function isDefensePreset(preset: PresetId): boolean {
   return DEFENSE_PRESETS.some((item) => item.id === preset)
 }
 
-/** Offensive routes for offense. Defensive jobs for defense. Linemen see the rush first. Kicking plays get the four special-teams jobs. */
-export function assignmentsFor(player: Player, special = false): { id: PresetId; label: string; kind: StrokeKind }[] {
+/** Offensive routes for offense. Defensive jobs for defense. Linemen see the rush first. Kicking plays get the four special-teams jobs. Flag has no block. */
+export function assignmentsFor(player: Player, special = false, format?: FormatId): { id: PresetId; label: string; kind: StrokeKind }[] {
   if (special) return specialJobs(player)
-  if (player.side !== 'defense') return ROUTE_PRESETS
+  if (player.side !== 'defense') {
+    if (format && format !== '11v11') return ROUTE_PRESETS.filter((item) => item.id !== 'block')
+    return ROUTE_PRESETS
+  }
   const order = player.role === 'dl' ? RUSH_FIRST : DEFENSE_PRESETS.map((item) => item.id)
   return order.map((id) => DEFENSE_PRESETS.find((item) => item.id === id)!).filter(Boolean)
 }
@@ -132,10 +135,11 @@ export function plainPreset(preset: PresetId): string {
 
 /**
  * Build a preset in field yards. `inside` is +1 when breaks toward +x are inside.
- * Upfield is +y.
+ * Upfield is +y. In, post, and corner break at 12 yards in tackle and 10 in flag.
  */
-export function presetPath(preset: PresetId, origin: Point, inside: -1 | 1): { points: Point[]; curves: (Point | null)[] } {
+export function presetPath(preset: PresetId, origin: Point, inside: -1 | 1, format?: FormatId): { points: Point[]; curves: (Point | null)[] } {
   const p = (x: number, y: number): Point => ({ x: origin.x + x, y: origin.y + y })
+  const stem = format && format !== '11v11' ? 10 : 12
   switch (preset) {
     case 'go':
       return { points: [p(0, 0), p(0, 15)], curves: [null] }
@@ -144,13 +148,13 @@ export function presetPath(preset: PresetId, origin: Point, inside: -1 | 1): { p
     case 'out':
       return { points: [p(0, 0), p(0, 8), p(-inside * 6, 8)], curves: [null, null] }
     case 'in':
-      return { points: [p(0, 0), p(0, 8), p(inside * 6, 8)], curves: [null, null] }
+      return { points: [p(0, 0), p(0, stem), p(inside * 6, stem)], curves: [null, null] }
     case 'post':
-      return { points: [p(0, 0), p(0, 9), p(inside * 6.5, 16)], curves: [null, null] }
+      return { points: [p(0, 0), p(0, stem), p(inside * 6.5, stem + 7)], curves: [null, null] }
     case 'corner':
       return {
-        points: [p(0, 0), p(0, 8), p(-inside * 6.5, 15)],
-        curves: [null, p(-inside * 1.2, 13.5)],
+        points: [p(0, 0), p(0, stem), p(-inside * 6.5, stem + 7)],
+        curves: [null, p(-inside * 1.2, stem + 5.5)],
       }
     case 'hitch':
       return { points: [p(0, 0), p(0, 5), p(0, 3.3)], curves: [null, null] }
@@ -243,6 +247,7 @@ export function presetFromPlayer(
   origin?: Point,
   inside?: -1 | 1,
   ballX = FIELD_WIDTH / 2,
+  format?: FormatId,
 ): { points: Point[]; curves: (Point | null)[] } {
   const start = origin ?? { x: player.x, y: player.y }
   if ((isDefensePreset(preset) && preset !== 'man') || preset === 'rush-kick') {
@@ -255,7 +260,7 @@ export function presetFromPlayer(
     const end = { x: start.x + (side === 'right' ? 5 : -5), y: start.y - 4 }
     return { points: [start, end], curves: [null] }
   }
-  return presetPath(preset, start, inside ?? insideDir(player.x))
+  return presetPath(preset, start, inside ?? insideDir(player.x), format)
 }
 
 export function makeStroke(

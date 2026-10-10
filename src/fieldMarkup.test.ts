@@ -22,7 +22,7 @@ describe('player markers', () => {
   it('draws the position inside the icon instead of under it', () => {
     const svg = fieldMarkup({ play: showcasePlay(), camera: EXPORT_CAMERA, theme: NIGHT })
     const radius = PLAYER_R * EXPORT_CAMERA.scale
-    for (const label of ['X', 'Y', 'Z', 'C', 'QB']) {
+    for (const label of ['WR1', 'WR2', 'TE', 'C', 'QB']) {
       const tag = labelTag(svg, label)
       expect(tag).toContain('x="0"')
       expect(tag).toContain('y="0"')
@@ -41,14 +41,15 @@ describe('player markers', () => {
       const tag = labelTag(svg, player.label)
       expect(tag, player.label).toContain('y="0"')
       const size = fontSize(tag)
-      const widthBudget = radius * 2 * (player.shape === 'diamond' ? 0.7 : 0.68)
+      const widthRatio = player.shape === 'diamond' ? 0.7 : player.shape === 'square' ? 0.78 : 0.68
+      const widthBudget = radius * 2 * widthRatio
       expect(size * Math.max(1, player.label.length) * 0.58, player.label).toBeLessThanOrEqual(widthBudget + 0.6)
     }
     const renamed = createPlay({ format: '5v5', formationId: 'doubles' })
-    const slot = renamed.players.find((player) => player.label === 'H')!
+    const slot = renamed.players.find((player) => player.label === 'WR2')!
     slot.label = 'SLT'
     const sized = fieldMarkup({ play: renamed, camera: EXPORT_CAMERA, theme: NIGHT })
-    expect(fontSize(labelTag(sized, 'SLT'))).toBeLessThan(fontSize(labelTag(sized, 'X')))
+    expect(fontSize(labelTag(sized, 'SLT'))).toBeLessThan(fontSize(labelTag(sized, 'C')))
   })
 
   it('picks ink that contrasts with offense, defense, and print fills', () => {
@@ -65,8 +66,8 @@ describe('player markers', () => {
     expect(labelTag(night, 'QB')).toContain('fill="#102033"')
     const defense = setShowDefense(createPlay({ format: '5v5', formationId: 'doubles' }), true)
     const shell = fieldMarkup({ play: defense, camera: EXPORT_CAMERA, theme: NIGHT })
-    const corner = defenseFor('5v5').find((player) => player.label === 'LC')!
-    expect(labelTag(shell, 'LC')).toContain(`fill="${labelInk(corner.color)}"`)
+    const corner = defenseFor('5v5').find((player) => player.label === 'CB1')!
+    expect(labelTag(shell, 'CB1')).toContain(`fill="${labelInk(corner.color)}"`)
     const printed = fieldMarkup({ play: showcasePlay(), camera: EXPORT_CAMERA, theme: PRINT })
     expect(labelTag(printed, 'C')).toContain('fill="#102033"')
   })

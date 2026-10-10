@@ -1,5 +1,5 @@
 import { ballMarkup } from '../ball'
-import { fieldToSvg, segmentTangent, type Camera } from '../geometry'
+import { fieldToSvg, markerReach, segmentTangent, type Camera } from '../geometry'
 import { ballXOf, presetOrigin } from '../play'
 import { kindForPreset, presetFromPlayer, zoneRadius } from '../presets'
 import { NIGHT } from '../theme'
@@ -21,9 +21,11 @@ export function PathPreview(props: { play: Play; player: Player; preset: PresetI
     presetOrigin(props.play, props.player.id, props.preset),
     inside,
     ballXOf(props.play),
+    props.play.format,
   )
   const origin = path.points[0]
-  const shift = (point: Point): Point => ({ x: point.x - origin.x + HALF, y: point.y - origin.y })
+  const drop = props.player.side === 'defense' ? markerReach(props.player.shape) : -markerReach(props.player.shape)
+  const shift = (point: Point): Point => ({ x: point.x - origin.x + HALF, y: point.y - origin.y + drop })
   const points = path.points.map(shift)
   const curves = path.curves.map((curve) => (curve ? shift(curve) : null))
   const width = HALF * 2 * SCALE

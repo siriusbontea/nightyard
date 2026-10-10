@@ -575,7 +575,7 @@ export function App() {
                 play={play}
                 camera={camera}
                 tool={tool}
-                strokeKind={strokeKind}
+                strokeKind={play.format !== '11v11' && strokeKind === 'block' ? 'route' : strokeKind}
                 selectedPlayerId={selectedPlayerId}
                 selectedStrokeId={selectedStrokeId}
                 playbackT={t}
@@ -638,7 +638,7 @@ export function App() {
         {tool === 'draw' ? (
           <div class="coach">
             <div class="kind-row">
-              {(['route', 'motion', 'block', 'run'] as StrokeKind[]).map((kind) => (
+              {(play.format === '11v11' ? (['route', 'motion', 'block', 'run'] as StrokeKind[]) : (['route', 'motion', 'run'] as StrokeKind[])).map((kind) => (
                 <button key={kind} type="button" class="chip" aria-pressed={strokeKind === kind} {...tip(DRAW_TIP[kind])} onClick={() => setStrokeKind(kind)}>
                   {DRAW_WORD[kind]}
                 </button>
@@ -650,7 +650,7 @@ export function App() {
             <button type="button" class="chip" {...tip('Pick a new path')} onClick={() => { setRedrawPlayerId(null); setSheet('presets') }}>
               Change route
             </button>
-            {selected.side === 'defense' ? null : (
+            {selected.side === 'defense' || play.format !== '11v11' ? null : (
               <button type="button" class="chip" {...tip('Block in front')} onClick={() => assign(selected.id, 'block')}>
                 Block
               </button>

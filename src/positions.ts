@@ -10,7 +10,7 @@ export interface PositionOption {
 }
 
 const ALL: FormatId[] = ['5v5', '6v6', '7v7', '8v8', '9v9', '11v11']
-const FROM_6: FormatId[] = ['6v6', '7v7', '8v8', '9v9', '11v11']
+const FLAG: FormatId[] = ['5v5', '6v6', '7v7', '8v8', '9v9']
 const FROM_7: FormatId[] = ['7v7', '8v8', '9v9', '11v11']
 const FROM_8: FormatId[] = ['8v8', '9v9', '11v11']
 const TACKLE: FormatId[] = ['11v11']
@@ -36,8 +36,13 @@ export const POSITIONS: readonly PositionOption[] = [
   { id: 'lb', label: 'LB', role: 'lb', side: 'defense', formats: ALL },
   { id: 'cb', label: 'CB', role: 'db', side: 'defense', formats: ALL },
   { id: 's', label: 'S', role: 'db', side: 'defense', formats: ALL },
-  { id: 'de', label: 'DE', role: 'dl', side: 'defense', formats: FROM_6 },
-  { id: 'dt', label: 'DT', role: 'dl', side: 'defense', formats: FROM_8 },
+  { id: 'fs', label: 'FS', role: 'db', side: 'defense', formats: TACKLE },
+  { id: 'ss', label: 'SS', role: 'db', side: 'defense', formats: TACKLE },
+  { id: 'nb', label: 'NB', role: 'db', side: 'defense', formats: TACKLE },
+  { id: 'r', label: 'R', role: 'dl', side: 'defense', formats: FLAG },
+  { id: 'de', label: 'DE', role: 'dl', side: 'defense', formats: TACKLE },
+  { id: 'dt', label: 'DT', role: 'dl', side: 'defense', formats: TACKLE },
+  { id: 'nt', label: 'NT', role: 'dl', side: 'defense', formats: TACKLE },
   { id: 'dl', label: 'DL', role: 'dl', side: 'defense', formats: TACKLE },
 ]
 
@@ -46,12 +51,23 @@ export function positionsFor(format: FormatId, side: Side): PositionOption[] {
 }
 
 export function labelIsStem(label: string, stem: string): boolean {
-  return label === stem || new RegExp(`^${stem}[2-9]$`).test(label)
+  return label === stem || new RegExp(`^${stem}[1-9]$`).test(label)
 }
+
+const NUMBER_FROM_ONE = new Set(['WR', 'LB', 'CB', 'DE', 'DT', 'R', 'NT', 'FS', 'SS', 'NB'])
 
 /** TE, then TE2, without touching another player's name. */
 export function nextLabel(players: readonly Player[], selfId: string, stem: string): string {
   const used = new Set(players.filter((player) => player.id !== selfId).map((player) => player.label))
+  if (NUMBER_FROM_ONE.has(stem)) {
+    const family = players.filter((player) => player.id !== selfId && labelIsStem(player.label, stem))
+    if (family.length === 0 && !used.has(stem)) return stem
+    for (let n = 1; n <= 9; n += 1) {
+      const candidate = `${stem}${n}`.slice(0, 4)
+      if (!used.has(candidate)) return candidate
+    }
+    return stem.slice(0, 4)
+  }
   if (!used.has(stem)) return stem
   for (let n = 2; n <= 9; n += 1) {
     const candidate = `${stem}${n}`.slice(0, 4)
