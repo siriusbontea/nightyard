@@ -25,6 +25,7 @@ import { renderPng } from '../pngExport'
 import { renderPlaybookFile, renderPlaybookPdf } from '../playbookPdf'
 import { playbookTitle } from '../playbookLayout'
 import { fieldHint, clearTipsSeen, markTipsSeen, tip, tipsSeen } from '../hints'
+import { HelmetBadge } from './HelmetBadge'
 import { downloadBlob, downloadText, shareOrDownload } from '../download'
 import { usePlaybook } from '../usePlaybook'
 import type { PlayCategory } from '../categories'
@@ -550,7 +551,7 @@ export function App() {
               {...tip('Your account')}
               onClick={() => openAccount('in')}
             >
-              {accountInitial(book.accountName) ? <span class="avatar-letter">{accountInitial(book.accountName)}</span> : <PersonIcon />}
+              <HelmetBadge letter={accountInitial(book.accountName)} />
             </button>
           </div>
           <p class="sub">
@@ -986,15 +987,6 @@ export function App() {
 function accountInitial(name: string | null): string {
   const letter = name?.trim().charAt(0) ?? ''
   return /[a-z0-9]/i.test(letter) ? letter.toUpperCase() : ''
-}
-
-function PersonIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-      <circle cx="12" cy="8" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8" />
-      <path d="M5.6 19.2c1.2-3.1 3.4-4.5 6.4-4.5s5.2 1.4 6.4 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-    </svg>
-  )
 }
 
 function Toast(props: { message: string; undo: (() => void) | null }) {
