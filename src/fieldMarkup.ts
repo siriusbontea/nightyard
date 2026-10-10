@@ -1,5 +1,5 @@
 import { ballMarkup } from './ball'
-import { END_ZONE_ART_H, END_ZONE_ART_W, END_ZONE_COLOR, END_ZONE_LINE } from './endZoneArt'
+import { COLOR_ART, END_ZONE_COLOR, END_ZONE_LINE, LINE_ART, placeEndZoneLogo } from './endZoneArt'
 import { END_ZONE_DEPTH, FIELD_LENGTH, HASH_INSET, displayedYard, fieldYAt, numberArrow } from './fieldMarks'
 import { FIELD_WIDTH, PLAYER_R, fieldToSvg, segmentTangent, viewSize, type Camera } from './geometry'
 import { isPlayerShown } from './play'
@@ -229,24 +229,12 @@ function yardNumbers(los: number, scale: number, ahead: number, height: number, 
 
 /** Logo centered in one end zone, under the lines. `upright` faces the far goal. */
 function endZoneArt(top: number, height: number, width: number, upright: boolean, print: boolean): string {
-  const margin = height * 0.1
-  const ratio = END_ZONE_ART_W / END_ZONE_ART_H
-  let drawH = height - margin * 2
-  let drawW = drawH * ratio
-  const maxW = width - margin * 2
-  if (drawW > maxW) {
-    drawW = maxW
-    drawH = drawW / ratio
-  }
-  const x = (width - drawW) / 2
-  const y = top + (height - drawH) / 2
+  const placed = placeEndZoneLogo(top, height, width, print ? LINE_ART : COLOR_ART)
   const href = escapeXml(print ? END_ZONE_LINE : END_ZONE_COLOR)
-  const image = `<image href="${href}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${drawW.toFixed(1)}" height="${drawH.toFixed(1)}" preserveAspectRatio="xMidYMid meet"/>`
+  const image = `<image href="${href}" x="${placed.x.toFixed(1)}" y="${placed.y.toFixed(1)}" width="${placed.width.toFixed(1)}" height="${placed.height.toFixed(1)}" preserveAspectRatio="none"/>`
   const opacity = print ? '1' : '0.72'
   if (upright) return `<g data-endzone="far" opacity="${opacity}" pointer-events="none">${image}</g>`
-  const cx = (x + drawW / 2).toFixed(1)
-  const cy = (y + drawH / 2).toFixed(1)
-  return `<g data-endzone="near" opacity="${opacity}" pointer-events="none" transform="rotate(180 ${cx} ${cy})">${image}</g>`
+  return `<g data-endzone="near" opacity="${opacity}" pointer-events="none" transform="rotate(180 ${placed.centerX.toFixed(1)} ${placed.centerY.toFixed(1)})">${image}</g>`
 }
 
 /**

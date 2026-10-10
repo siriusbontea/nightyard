@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { END_ZONE_COLOR, END_ZONE_LINE } from './endZoneArt'
+import { COLOR_ART, END_ZONE_COLOR, END_ZONE_LINE, LINE_ART, artContentCenter } from './endZoneArt'
 import { fieldMarkup, labelFontSize, labelInk } from './fieldMarkup'
 import { fieldYAt } from './fieldMarks'
 import { OUR_COLOR, ROUTE_PALETTE, THEIR_COLOR, defenseFor } from './formations'
@@ -253,6 +253,29 @@ describe('player markers', () => {
     expect(svg.slice(far, far + 80)).not.toContain('rotate(180')
     expect(far).toBeLessThan(line)
     expect(near).toBeLessThan(line)
+  })
+
+  it('centers the visible dog between the goal line and the end line', () => {
+    const play = createPlay({ format: '5v5', formationId: 'doubles' })
+    play.los = 10
+    const camera = { ahead: 20, behind: 110, scale: 10 }
+    for (const [theme, box] of [
+      [NIGHT, COLOR_ART],
+      [PRINT, LINE_ART],
+    ] as const) {
+      const svg = fieldMarkup({ play, camera, theme })
+      const zones = [...svg.matchAll(new RegExp(`<rect x="0" y="(-?[\\d.]+)" width="([\\d.]+)" height="([\\d.]+)" fill="${theme.endZone}"`, 'g'))]
+      const arts = [...svg.matchAll(/<g data-endzone="(far|near)"[^>]*>\s*<image [^>]*x="(-?[\d.]+)" y="(-?[\d.]+)" width="([\d.]+)" height="([\d.]+)"/g)]
+      expect(zones.length).toBe(arts.length)
+      const content = artContentCenter(box)
+      arts.forEach((art, index) => {
+        const zone = zones[index]
+        const vx = Number(art[2]) + content.x * Number(art[4])
+        const vy = Number(art[3]) + content.y * Number(art[5])
+        expect(vx).toBeCloseTo(Number(zone[2]) / 2, 0)
+        expect(vy).toBeCloseTo(Number(zone[1]) + Number(zone[3]) / 2, 0)
+      })
+    }
   })
 
   it('uses team colors on a defense play and keeps path colors different', () => {

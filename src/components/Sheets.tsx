@@ -39,7 +39,7 @@ export function Sheet(props: {
             <h2>{props.title}</h2>
             {props.subtitle ? <p class="sheet-sub">{props.subtitle}</p> : null}
           </div>
-          <button type="button" class="icon-btn" aria-label="Close" onClick={props.onClose}>
+          <button type="button" class="icon-btn" aria-label="Close" data-tip="Close this" onClick={props.onClose}>
             <CloseIcon />
           </button>
         </div>
@@ -398,6 +398,7 @@ export function MoreSheet(props: {
   onExport: () => void
   onReset: () => void
   onFlip: () => void
+  onShowTips: () => void
   onClose: () => void
 }) {
   const [askReset, setAskReset] = useState(false)
@@ -435,6 +436,10 @@ export function MoreSheet(props: {
         Flip play
         <small>Mirror everyone the other way</small>
       </button>
+      <button type="button" class="row-btn" data-tip="See the short tour" onClick={props.onShowTips}>
+        Show tips again
+        <small>A short look around the screen</small>
+      </button>
       <button type="button" class="row-btn" onClick={props.onExport}>
         Download pictures
       </button>
@@ -456,6 +461,7 @@ export function ExportSheet(props: {
   onToggleNotes: () => void
   onToggleAssignments: () => void
   onPng: (style: 'print' | 'color') => void
+  onPdf: (style: 'print' | 'color') => void
   onClose: () => void
 }) {
   return (
@@ -474,7 +480,13 @@ export function ExportSheet(props: {
       <button type="button" class="primary wide ghost" disabled={props.busy} onClick={() => props.onPng('color')}>
         Download color picture
       </button>
-      <p class="fine">Pictures are letter size. White is for printing. Color looks like the field. Play files are in Plays.</p>
+      <button type="button" class="primary wide" disabled={props.busy} data-tip="White playbook with the dog" onClick={() => props.onPdf('print')}>
+        Download white playbook
+      </button>
+      <button type="button" class="primary wide ghost" disabled={props.busy} data-tip="Color playbook with the dog" onClick={() => props.onPdf('color')}>
+        Download color playbook
+      </button>
+      <p class="fine">Pictures and playbooks are letter size. The cover has the team dog. White is for printing. Color looks like the field. Play files are in Plays.</p>
     </Sheet>
   )
 }

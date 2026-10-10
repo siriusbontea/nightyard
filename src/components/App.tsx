@@ -22,6 +22,8 @@ import {
 } from '../play'
 import { isDefensePreset, isDirectionalPreset } from '../presets'
 import { renderPng } from '../pngExport'
+import { renderPlaybookPdf } from '../playbookPdf'
+import { fieldHint, clearTipsSeen, markTipsSeen, tip, tipsSeen } from '../hints'
 import { downloadBlob, downloadText } from '../download'
 import { usePlaybook } from '../usePlaybook'
 import type { PlayCategory } from '../categories'
@@ -35,12 +37,20 @@ import { AccountSheet } from './AccountSheet'
 import { ExportSheet, MoreSheet, PlayerSheet, PlaySettings, PresetSheet } from './Sheets'
 import { SavedPlaysSheet } from './SavedPlaysSheet'
 import { GuestSavePrompt, WelcomeCard } from './WelcomeCard'
+import { TipHost } from './TipHost'
+import { CoachTour } from './CoachTour'
 
 type Tool = 'move' | 'draw'
 type SheetId = null | 'book' | 'presets' | 'player' | 'more' | 'export' | 'play' | 'account'
 const SPEEDS = [0.5, 1, 1.5] as const
 const SPEED_WORD: Record<(typeof SPEEDS)[number], string> = { 0.5: 'Slow', 1: 'Normal', 1.5: 'Fast' }
 const DRAW_WORD: Record<StrokeKind, string> = { route: 'Line', motion: 'Walk', block: 'Block', run: 'Run' }
+const DRAW_TIP: Record<StrokeKind, string> = {
+  route: 'Draw a route',
+  motion: 'Move before the snap',
+  block: 'Draw a block',
+  run: 'Draw a run',
+}
 const SAVE_EXPLAINER = 'Your plays save by themselves. Open them on any device by signing in.'
 
 function SaveChip(props: {
@@ -52,14 +62,14 @@ function SaveChip(props: {
   if (!props.label) return null
   if (props.kind === 'guest') {
     return (
-      <button type="button" class="save-chip guest" onClick={props.onGuest}>
+      <button type="button" class="save-chip guest" data-tip="Make a free account" onClick={props.onGuest}>
         {props.label}
       </button>
     )
   }
   if (props.kind === 'local') return <p class="save-chip static">{props.label}</p>
   return (
-    <button type="button" class={`save-chip ${props.kind}`} aria-live="polite" onClick={props.onExplain}>
+    <button type="button" class={`save-chip ${props.kind}`} data-tip="Shows if the play is saved" aria-live="polite" onClick={props.onExplain}>
       {props.label}
     </button>
   )
@@ -93,6 +103,7 @@ export function App() {
   const [accountMode, setAccountMode] = useState<'in' | 'up'>('in')
   const [savePrompt, setSavePrompt] = useState(false)
   const [welcomeOn, setWelcomeOn] = useState(() => shouldShowWelcome(false, welcomeDismissed()))
+  const [tourOn, setTourOn] = useState(false)
   const [savedOpen, setSavedOpen] = useState(false)
   const frameRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -183,6 +194,11 @@ export function App() {
     setWelcomeOn(false)
   }, [book.accountName])
 
+  useEffect(() => {
+    if (!play || tipsSeen() || welcomeOn) return
+    setTourOn(true)
+  }, [play?.id, welcomeOn])
+
   function chooseTool(next: Tool) {
     setTool(next)
     setRedrawPlayerId(null)
@@ -271,6 +287,31 @@ export function App() {
     })
   }
 
+  function finishTour() {
+    markTipsSeen()
+    setTourOn(false)
+  }
+
+  async function exportPdf(style: 'print' | 'color') {
+    setBusy(true)
+    try {
+      const bytes = await renderPlaybookPdf({
+        name: book.bookName,
+        plays: book.plays,
+        style,
+        date: new Date(),
+        includeNotes,
+        includeAssignments,
+      })
+      downloadBlob(`${slug(book.bookName)}-${style}.pdf`, new Blob([bytes.slice().buffer], { type: 'application/pdf' }))
+      book.notify(style === 'print' ? 'White playbook saved' : 'Color playbook saved')
+    } catch (error) {
+      book.notify(error instanceof Error ? error.message : 'Could not make the playbook.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function exportPng(style: 'print' | 'color') {
     if (!play) return
     setBusy(true)
@@ -310,7 +351,7 @@ export function App() {
           Open a saved play
         </button>
         {book.guest && !showWelcome ? (
-          <button type="button" class="guest-chip" onClick={() => openAccount('up')}>
+          <button type="button" class="guest-chip" data-tip="Make a free account" onClick={() => openAccount('up')}>
             Guest — make a free account to save
           </button>
         ) : null}
@@ -365,6 +406,7 @@ export function App() {
           }}
         />
         {book.toast ? <Toast message={book.toast} undo={book.toastUndo} /> : null}
+        <TipHost />
       </div>
     )
   }
@@ -410,30 +452,37 @@ export function App() {
       <div class="stage">
         <header class="top">
           <div class="title-row">
-            <button type="button" class="title-btn" onClick={() => setSheet('play')}>
+            <button type="button" class="title-btn" {...tip('Open play setup')} onClick={() => setSheet('play')}>
               <span class="brand">Night Yard</span>
               <span class="play-title">{play.name}</span>
             </button>
-            <button type="button" class="text-btn account-btn" onClick={() => openAccount('in')}>
-              {book.accountName ?? 'Sign in'}
-            </button>
-            <button type="button" class="text-btn setup-btn" onClick={() => setSheet('play')}>
-              Setup
-            </button>
-            <button type="button" class="icon-btn labeled" aria-label="Undo" disabled={!book.canUndo} onClick={book.undo}>
-              <UndoIcon />
-              <span>Undo</span>
-            </button>
-            <button type="button" class="icon-btn labeled" aria-label="Redo" disabled={!book.canRedo} onClick={book.redo}>
-              <RedoIcon />
-              <span>Redo</span>
+            <div class="header-tools">
+              <button type="button" class="text-btn setup-btn" {...tip('Change the lineup')} onClick={() => setSheet('play')}>
+                Setup
+              </button>
+              <button type="button" class="icon-btn labeled" {...tip('Undo the last change')} disabled={!book.canUndo} onClick={book.undo}>
+                <UndoIcon />
+                <span>Undo</span>
+              </button>
+              <button type="button" class="icon-btn labeled" {...tip('Put that change back')} disabled={!book.canRedo} onClick={book.redo}>
+                <RedoIcon />
+                <span>Redo</span>
+              </button>
+            </div>
+            <button
+              type="button"
+              class={book.accountName ? 'avatar' : 'avatar guest'}
+              {...tip('Your account')}
+              onClick={() => openAccount('in')}
+            >
+              {accountInitial(book.accountName) || <PersonIcon />}
             </button>
           </div>
           <p class="sub">
             {play.formation} · {formatShort(play.format)} · Start on {ballLabel(play.los)}
           </p>
           {book.guest && !showWelcome ? (
-            <button type="button" class="guest-chip" onClick={() => openAccount('up')}>
+            <button type="button" class="guest-chip" data-tip="Make a free account" onClick={() => openAccount('up')}>
               Guest — make a free account to save
             </button>
           ) : null}
@@ -476,7 +525,7 @@ export function App() {
           </div>
         </div>
         <div class="playback" aria-label="Playback">
-          <button type="button" class="icon-btn play" aria-label={playing ? 'Pause' : 'Play'} onClick={togglePlay}>
+          <button type="button" class="icon-btn play" {...tip(playing ? 'Pause the play' : 'Watch the play')} onClick={togglePlay}>
             {playing ? <PauseIcon /> : <PlayIcon />}
           </button>
           <input
@@ -485,7 +534,8 @@ export function App() {
             min="0"
             max="1000"
             value={Math.round(t * 1000)}
-            aria-label="Scrub the play"
+            aria-label="Slide through the play"
+            data-tip="Slide through the play"
             onInput={(event) => {
               setPlaying(false)
               setT(Number((event.currentTarget as HTMLInputElement).value) / 1000)
@@ -494,19 +544,27 @@ export function App() {
           <button
             type="button"
             class="speed"
-            aria-label={`Speed ${SPEED_WORD[speed]}`}
+            {...tip('Change the speed')}
             onClick={() => setSpeed(SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length])}
           >
             {SPEED_WORD[speed]}
           </button>
         </div>
-        {redrawPlayerId ? <p class="hint">Drag from this player. The new path replaces the old one.</p> : null}
+        <p class="hint">
+          {fieldHint({
+            tool,
+            pathsOpen: sheet === 'presets',
+            redraw: Boolean(redrawPlayerId),
+            defense: (selected?.side ?? play.ourSide) === 'defense',
+            guest: book.guest,
+            selected: Boolean(selected),
+          })}
+        </p>
         {tool === 'draw' ? (
           <div class="coach">
-            <p class="hint">Drag from a player.</p>
             <div class="kind-row">
               {(['route', 'motion', 'block', 'run'] as StrokeKind[]).map((kind) => (
-                <button key={kind} type="button" class="chip" aria-pressed={strokeKind === kind} onClick={() => setStrokeKind(kind)}>
+                <button key={kind} type="button" class="chip" aria-pressed={strokeKind === kind} {...tip(DRAW_TIP[kind])} onClick={() => setStrokeKind(kind)}>
                   {DRAW_WORD[kind]}
                 </button>
               ))}
@@ -514,17 +572,18 @@ export function App() {
           </div>
         ) : selected && play.strokes.some((stroke) => stroke.playerId === selected.id) ? (
           <div class="route-options">
-            <button type="button" class="chip" onClick={() => { setRedrawPlayerId(null); setSheet('presets') }}>
+            <button type="button" class="chip" {...tip('Pick a new path')} onClick={() => { setRedrawPlayerId(null); setSheet('presets') }}>
               Change route
             </button>
             {selected.side === 'defense' ? null : (
-              <button type="button" class="chip" onClick={() => assign(selected.id, 'block')}>
+              <button type="button" class="chip" {...tip('Block in front')} onClick={() => assign(selected.id, 'block')}>
                 Block
               </button>
             )}
             <button
               type="button"
               class="chip"
+              {...tip('Draw a new path')}
               onClick={() => {
                 setSelectedPlayerId(selected.id)
                 setRedrawPlayerId(selected.id)
@@ -536,6 +595,7 @@ export function App() {
             <button
               type="button"
               class="chip"
+              {...tip('Take the path off')}
               onClick={() => {
                 stopPlayback()
                 book.update(removeRoute(play, selected.id))
@@ -544,10 +604,10 @@ export function App() {
             >
               Remove route
             </button>
-            <button type="button" class="chip" onClick={() => applyBreak(breakSide === 'left' ? 'right' : 'left')}>
+            <button type="button" class="chip" {...tip('Flip this path')} onClick={() => applyBreak(breakSide === 'left' ? 'right' : 'left')}>
               Flip
             </button>
-            <button type="button" class="text-btn" onClick={() => setSheet('player')}>
+            <button type="button" class="text-btn" {...tip('Change this player')} onClick={() => setSheet('player')}>
               Edit
             </button>
           </div>
@@ -557,13 +617,13 @@ export function App() {
               <i style={{ background: selected.color }} />
               {selected.label}
             </span>
-            <span class="hint grow">Drag to move. Tap to change.</span>
-            <button type="button" class="text-btn" onClick={() => setSheet('player')}>
+            <button type="button" class="text-btn" {...tip('Change this player')} onClick={() => setSheet('player')}>
               Edit
             </button>
             <button
               type="button"
               class="text-btn"
+              {...tip('Erase their lines')}
               onClick={() => {
                 book.update(clearPlayerStrokes(play, selected.id))
                 setSelectedStrokeId(null)
@@ -573,27 +633,25 @@ export function App() {
               Erase
             </button>
           </div>
-        ) : (
-          <p class="hint">Tap a player to change them.</p>
-        )}
+        ) : null}
         <nav class="toolbar" aria-label="Tools">
-          <button type="button" class="tool" onClick={() => { setRedrawPlayerId(null); setSheet('book') }}>
+          <button type="button" class="tool" {...tip('Open your plays')} onClick={() => { setRedrawPlayerId(null); setSheet('book') }}>
             <BookIcon />
             Plays
           </button>
-          <button type="button" class="tool" aria-pressed={tool === 'move'} onClick={() => chooseTool('move')}>
+          <button type="button" class="tool" aria-pressed={tool === 'move'} {...tip('Move a player')} onClick={() => chooseTool('move')}>
             <MoveIcon />
             Move
           </button>
-          <button type="button" class="tool" aria-pressed={tool === 'draw'} onClick={() => chooseTool('draw')}>
+          <button type="button" class="tool" aria-pressed={tool === 'draw'} {...tip('Draw a path')} onClick={() => chooseTool('draw')}>
             <DrawIcon />
             Draw
           </button>
-          <button type="button" class="tool" onClick={() => { setRedrawPlayerId(null); setSheet('presets') }}>
+          <button type="button" class="tool" {...tip('Pick a ready path')} onClick={() => { setRedrawPlayerId(null); setSheet('presets') }}>
             <RouteIcon />
             Paths
           </button>
-          <button type="button" class="tool" onClick={() => { setRedrawPlayerId(null); setSheet('more') }}>
+          <button type="button" class="tool" {...tip('More choices')} onClick={() => { setRedrawPlayerId(null); setSheet('more') }}>
             <MoreIcon />
             More
           </button>
@@ -723,6 +781,11 @@ export function App() {
             book.update(flipPlay(play))
             setSheet(null)
           }}
+          onShowTips={() => {
+            clearTipsSeen()
+            setTourOn(true)
+            setSheet(null)
+          }}
           onClose={() => setSheet(null)}
         />
       ) : null}
@@ -734,6 +797,7 @@ export function App() {
           onToggleNotes={() => setIncludeNotes((value) => !value)}
           onToggleAssignments={() => setIncludeAssignments((value) => !value)}
           onPng={exportPng}
+          onPdf={exportPdf}
           onClose={() => setSheet(null)}
         />
       ) : null}
@@ -792,7 +856,23 @@ export function App() {
         }}
       />
       {book.toast ? <Toast message={book.toast} undo={book.toastUndo} /> : null}
+      {tourOn && !showWelcome ? <CoachTour onDone={finishTour} /> : null}
+      <TipHost />
     </div>
+  )
+}
+
+function accountInitial(name: string | null): string {
+  const letter = name?.trim().charAt(0) ?? ''
+  return /[a-z0-9]/i.test(letter) ? letter.toUpperCase() : ''
+}
+
+function PersonIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+      <circle cx="12" cy="8" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8" />
+      <path d="M5.6 19.2c1.2-3.1 3.4-4.5 6.4-4.5s5.2 1.4 6.4 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    </svg>
   )
 }
 
