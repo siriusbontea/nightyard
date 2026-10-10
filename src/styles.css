@@ -545,6 +545,56 @@ textarea { min-height: 96px; resize: vertical; }
   margin: 8px 0;
 }
 .filter-row .chip { flex: 0 0 auto; }
+.style-picks { display: flex; gap: 8px; }
+.style-picks .chip { flex: 1 1 0; }
+.pick-count { margin: 0; font-size: 18px; font-weight: 750; }
+.pick-scroll {
+  overflow: auto;
+  max-height: 48dvh;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pick-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pick-head .group-label { margin: 0; }
+.select-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-weight: 700;
+  padding: 0;
+}
+.pick-box {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.pick-row {
+  width: 100%;
+  min-height: 72px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  border: 0;
+  border-radius: 14px;
+  background: var(--bg-control);
+  padding: 8px;
+}
+.pick-row[aria-pressed='true'] .pick-box,
+.select-all[aria-pressed='true'] .pick-box {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
 .group-label {
   margin: 14px 0 6px;
   font-size: 13px;

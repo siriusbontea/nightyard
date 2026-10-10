@@ -22,16 +22,18 @@ import {
 } from '../play'
 import { isDefensePreset, isDirectionalPreset } from '../presets'
 import { renderPng } from '../pngExport'
-import { renderPlaybookPdf } from '../playbookPdf'
+import { renderPlaybookFile, renderPlaybookPdf } from '../playbookPdf'
+import { playbookTitle } from '../playbookLayout'
 import { fieldHint, clearTipsSeen, markTipsSeen, tip, tipsSeen } from '../hints'
-import { downloadBlob, downloadText } from '../download'
+import { downloadBlob, downloadText, shareOrDownload } from '../download'
 import { usePlaybook } from '../usePlaybook'
 import type { PlayCategory } from '../categories'
-import type { PresetId, StrokeKind } from '../types'
+import type { Play, PresetId, StrokeKind } from '../types'
 import { formatShort } from '../types'
 import { Field } from './Field'
 import { PlaybookList } from './PlaybookList'
 import { PlaysSheet } from './PlaysSheet'
+import { PlaybookSheet } from './PlaybookSheet'
 import { dismissWelcome, saveNeedsAccount, shouldShowWelcome, welcomeDismissed } from '../guest'
 import { AccountSheet } from './AccountSheet'
 import { ExportSheet, MoreSheet, PlayerSheet, PlaySettings, PresetSheet } from './Sheets'
@@ -41,7 +43,7 @@ import { TipHost } from './TipHost'
 import { CoachTour } from './CoachTour'
 
 type Tool = 'move' | 'draw'
-type SheetId = null | 'book' | 'presets' | 'player' | 'more' | 'export' | 'play' | 'account'
+type SheetId = null | 'book' | 'presets' | 'player' | 'more' | 'export' | 'play' | 'account' | 'playbook'
 const SPEEDS = [0.5, 1, 1.5] as const
 const SPEED_WORD: Record<(typeof SPEEDS)[number], string> = { 0.5: 'Slow', 1: 'Normal', 1.5: 'Fast' }
 const DRAW_WORD: Record<StrokeKind, string> = { route: 'Line', motion: 'Walk', block: 'Block', run: 'Run' }
@@ -102,6 +104,7 @@ export function App() {
   const [camera, setCamera] = useState(() => openingCamera(DEFAULT_LOS))
   const [accountMode, setAccountMode] = useState<'in' | 'up'>('in')
   const [savePrompt, setSavePrompt] = useState(false)
+  const [promptDetail, setPromptDetail] = useState<string | null>(null)
   const [welcomeOn, setWelcomeOn] = useState(() => shouldShowWelcome(false, welcomeDismissed()))
   const [tourOn, setTourOn] = useState(false)
   const [savedOpen, setSavedOpen] = useState(false)
@@ -207,6 +210,7 @@ export function App() {
   function guestBlocked(action: 'save-play' | 'save-all' | 'new-play' | 'sync') {
     if (!saveNeedsAccount(book.guest, action)) return false
     setSheet(null)
+    setPromptDetail(null)
     setSavePrompt(true)
     return true
   }
@@ -292,6 +296,28 @@ export function App() {
     setTourOn(false)
   }
 
+  async function makePlaybook(choice: { title: string; style: 'print' | 'color'; plays: Play[] }) {
+    setBusy(true)
+    try {
+      const bytes = await renderPlaybookFile({
+        title: choice.title,
+        plays: choice.plays,
+        style: choice.style,
+        date: new Date(),
+      })
+      const filename = `${slug(playbookTitle(choice.title))}-${choice.style}.pdf`
+      const blob = new Blob([bytes.slice().buffer], { type: 'application/pdf' })
+      const shared = await shareOrDownload(filename, blob)
+      book.notify(shared === 'shared' ? 'Playbook ready to share' : 'Playbook saved')
+      setSheet(null)
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') return
+      book.notify(error instanceof Error ? error.message : 'Could not make the playbook.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function exportPdf(style: 'print' | 'color') {
     setBusy(true)
     try {
@@ -366,7 +392,13 @@ export function App() {
             onClose={() => setSheet(null)}
           />
         ) : null}
-        {savePrompt ? <GuestSavePrompt onCreate={() => openAccount('up')} onClose={() => setSavePrompt(false)} /> : null}
+        {savePrompt ? (
+          <GuestSavePrompt
+            detail={promptDetail ?? undefined}
+            onCreate={() => openAccount('up')}
+            onClose={() => setSavePrompt(false)}
+          />
+        ) : null}
         {showWelcome ? (
           <WelcomeCard onCreate={() => openAccount('up')} onTry={tryFirst} onSignIn={() => openAccount('in')} />
         ) : null}
@@ -699,8 +731,17 @@ export function App() {
           }}
           onLoadFile={() => fileRef.current?.click()}
           onSignIn={() => openAccount('in')}
+          onPlaybook={() => setSheet('playbook')}
+          onNeedAccount={() => {
+            setSheet(null)
+            setPromptDetail('A playbook uses plays saved to your account.')
+            setSavePrompt(true)
+          }}
           onClose={() => setSheet(null)}
         />
+      ) : null}
+      {sheet === 'playbook' && book.accountName ? (
+        <PlaybookSheet localPlays={book.plays} busy={busy} onClose={() => setSheet(null)} onMake={makePlaybook} />
       ) : null}
       {sheet === 'play' ? (
         <PlaySettings
@@ -809,7 +850,13 @@ export function App() {
           onClose={() => setSheet(null)}
         />
       ) : null}
-      {savePrompt ? <GuestSavePrompt onCreate={() => openAccount('up')} onClose={() => setSavePrompt(false)} /> : null}
+      {savePrompt ? (
+        <GuestSavePrompt
+          detail={promptDetail ?? undefined}
+          onCreate={() => openAccount('up')}
+          onClose={() => setSavePrompt(false)}
+        />
+      ) : null}
       {showWelcome ? (
         <WelcomeCard onCreate={() => openAccount('up')} onTry={tryFirst} onSignIn={() => openAccount('in')} />
       ) : null}

@@ -21,11 +21,11 @@ export function WelcomeCard(props: { onCreate: () => void; onTry: () => void; on
   )
 }
 
-export function GuestSavePrompt(props: { onCreate: () => void; onClose: () => void }) {
+export function GuestSavePrompt(props: { onCreate: () => void; onClose: () => void; detail?: string }) {
   return (
     <Sheet title="Save your plays" onClose={props.onClose}>
       <p class="welcome-copy">Make a free account to save your plays and use them on any device.</p>
-      <p class="fine">This play stays on the screen. Saving and sync need a free account.</p>
+      <p class="fine">{props.detail ?? 'This play stays on the screen. Saving and sync need a free account.'}</p>
       <button type="button" class="primary wide welcome-btn" onClick={props.onCreate}>
         Make free account
       </button>

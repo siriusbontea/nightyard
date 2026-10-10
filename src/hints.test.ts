@@ -21,7 +21,19 @@ describe('field hints', () => {
   })
 
   it('keeps button tips to eight words', () => {
-    for (const text of ['Your account', 'Undo the last change', 'Open your plays', 'Pick a ready path', 'Watch the play']) {
+    for (const text of [
+      'Your account',
+      'Undo the last change',
+      'Open your plays',
+      'Pick a ready path',
+      'Watch the play',
+      'Pick plays for a PDF',
+      'Pick every play here',
+      'Add this play',
+      'Take this play off',
+      'White pages for printing',
+      'Save the playbook',
+    ]) {
       expect(text.split(/\s+/).length).toBeLessThanOrEqual(8)
       expect(tip(text)['aria-label']).toBe(text)
     }

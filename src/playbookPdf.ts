@@ -1,9 +1,14 @@
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib'
+import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFImage, type PDFPage } from 'pdf-lib'
+import { categoryOf, isPlayCategory, type PlayCategory } from './categories'
 import { COLOR_ART, END_ZONE_COLOR, END_ZONE_LINE, LINE_ART, artContentCenter, type OpaqueBox } from './endZoneArt'
+import { fieldMarkup } from './fieldMarkup'
+import { viewSize } from './geometry'
+import { layoutQuickPages, noteRows, playbookTitle, wrapToWidth } from './playbookLayout'
 import { renderPng } from './pngExport'
 import { COLOR_FIELD, PRINT } from './theme'
 import type { ExportStyle } from './exportSvg'
 import type { Play } from './types'
+import { formatLabel } from './types'
 
 export const LETTER_W = 612
 export const LETTER_H = 792
@@ -150,5 +155,252 @@ export async function renderPlaybookPdf(input: {
     logoPng,
     art: input.style === 'print' ? LINE_ART : COLOR_ART,
     pages,
+  })
+}
+
+/** Field-only diagram. Scale is high enough to stay sharp on a letter page. */
+export const DIAGRAM_SCALE = 28
+
+export function renderDiagramSvg(play: Play, style: ExportStyle): string {
+  const theme = style === 'print' ? PRINT : COLOR_FIELD
+  const camera = { ahead: 30, behind: 16, scale: DIAGRAM_SCALE }
+  const size = viewSize(camera)
+  const body = fieldMarkup({ play, camera, theme, showHandles: false })
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size.w.toFixed(0)}" height="${size.h.toFixed(0)}" viewBox="0 0 ${size.w} ${size.h}">${body}</svg>`
+}
+
+export interface PlaybookPagePlay {
+  number: number
+  name: string
+  formation: string
+  formatLabel: string
+  category: string
+  notes: string
+  diagram: Uint8Array
+}
+
+const MARGIN = 36
+const TILE_GAP = 8
+const TILE_LABEL = 13
+const TILE_DIAGRAM = 132
+const TILE_ROW = TILE_LABEL + 4 + TILE_DIAGRAM + 8
+
+function asCategory(value: string): PlayCategory {
+  return isPlayCategory(value) ? value : 'Other'
+}
+
+function fitLine(text: string, font: PDFFont, size: number, maxWidth: number): string {
+  const clean = pdfSafe(text, '')
+  if (!clean) return ''
+  if (font.widthOfTextAtSize(clean, size) <= maxWidth) return clean
+  let next = clean
+  while (next.length > 1 && font.widthOfTextAtSize(`${next}...`, size) > maxWidth) next = next.slice(0, -1)
+  return `${next}...`
+}
+
+function footer(page: PDFPage, font: PDFFont, pageNumber: number, color: ReturnType<typeof rgb>) {
+  const label = String(pageNumber)
+  const size = 10
+  const width = font.widthOfTextAtSize(label, size)
+  page.drawText(label, { x: (LETTER_W - width) / 2, y: 18, size, font, color })
+}
+
+function contain(boxW: number, boxH: number, imgW: number, imgH: number) {
+  const scale = Math.min(boxW / imgW, boxH / imgH)
+  const width = imgW * scale
+  const height = imgH * scale
+  return { width, height, ox: (boxW - width) / 2, oy: (boxH - height) / 2 }
+}
+
+/** Cover, quick-view grid, then one full page per play. Page numbers sit in the footer. */
+export async function buildPlaybookDocument(input: {
+  title: string
+  dateLabel: string
+  style: ExportStyle
+  logoPng: Uint8Array
+  art: OpaqueBox
+  plays: PlaybookPagePlay[]
+}): Promise<Uint8Array> {
+  const doc = await PDFDocument.create()
+  const title = pdfSafe(playbookTitle(input.title), 'Dawgs Playbook')
+  const dateLabel = pdfSafe(input.dateLabel, '')
+  doc.setTitle(title)
+  doc.setSubject(dateLabel)
+  const font = await doc.embedFont(StandardFonts.Helvetica)
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold)
+  const theme = input.style === 'print' ? PRINT : COLOR_FIELD
+  const ink = fill(theme.title)
+  const muted = fill(theme.muted)
+  const paper = fill(theme.page)
+  const logo = await doc.embedPng(input.logoPng)
+  const diagrams = new Map<number, PDFImage>()
+  for (const play of input.plays) diagrams.set(play.number, await doc.embedPng(play.diagram))
+
+  const quick = layoutQuickPages(
+    input.plays.map((play) => ({
+      id: String(play.number),
+      name: play.name,
+      category: asCategory(play.category),
+      number: play.number,
+    })),
+  )
+  let pageNumber = 1
+
+  const place = coverPlacement(input.art)
+  const cover = doc.addPage([LETTER_W, LETTER_H])
+  cover.drawRectangle({ x: 0, y: 0, width: LETTER_W, height: LETTER_H, color: paper })
+  cover.drawImage(logo, { x: place.x, y: place.y, width: place.width, height: place.height })
+  let titleSize = 36
+  while (titleSize > 18 && bold.widthOfTextAtSize(title, titleSize) > 480) titleSize -= 2
+  drawCentered(cover, title, place.titleY, titleSize, bold, ink)
+  drawCentered(cover, dateLabel, place.dateY, 16, font, muted)
+  footer(cover, font, pageNumber, muted)
+  pageNumber += 1
+
+  const tileW = (LETTER_W - MARGIN * 2 - TILE_GAP * 2) / 3
+  for (const quickPage of quick) {
+    const page = doc.addPage([LETTER_W, LETTER_H])
+    page.drawRectangle({ x: 0, y: 0, width: LETTER_W, height: LETTER_H, color: paper })
+    let cursor = LETTER_H - 42
+    page.drawText('Quick view', { x: MARGIN, y: cursor, size: 14, font: bold, color: ink })
+    cursor -= 24
+    for (const block of quickPage.blocks) {
+      page.drawText(pdfSafe(block.category, 'Other'), { x: MARGIN, y: cursor, size: 12, font: bold, color: ink })
+      cursor -= 16
+      for (let index = 0; index < block.tiles.length; index += 3) {
+        const row = block.tiles.slice(index, index + 3)
+        row.forEach((tile, column) => {
+          const x = MARGIN + column * (tileW + TILE_GAP)
+          const label = fitLine(`${tile.number}  ${tile.name}`, bold, 9, tileW)
+          page.drawText(label, { x, y: cursor, size: 9, font: bold, color: ink })
+          const image = diagrams.get(tile.number)
+          if (!image) return
+          const fit = contain(tileW, TILE_DIAGRAM, image.width, image.height)
+          const ix = x + fit.ox
+          const iy = cursor - TILE_LABEL - TILE_DIAGRAM + fit.oy
+          page.drawImage(image, { x: ix, y: iy, width: fit.width, height: fit.height })
+        })
+        cursor -= TILE_ROW
+      }
+      cursor -= 6
+    }
+    footer(page, font, pageNumber, muted)
+    pageNumber += 1
+  }
+
+  for (const play of input.plays) {
+    const page = doc.addPage([LETTER_W, LETTER_H])
+    page.drawRectangle({ x: 0, y: 0, width: LETTER_W, height: LETTER_H, color: paper })
+    const textWidth = LETTER_W - MARGIN * 2
+    let cursor = LETTER_H - 46
+    const heading = wrapToWidth(pdfSafe(`${play.number}  ${play.name}`, 'Play'), (line) => bold.widthOfTextAtSize(line, 20), textWidth).slice(0, 2)
+    for (const line of heading) {
+      page.drawText(line, { x: MARGIN, y: cursor, size: 20, font: bold, color: ink })
+      cursor -= 24
+    }
+    const meta = pdfSafe(`${play.formation} - ${play.formatLabel} - ${play.category}`, '')
+    page.drawText(fitLine(meta, font, 11, textWidth), { x: MARGIN, y: cursor, size: 11, font, color: muted })
+    cursor -= 16
+
+    const rows = noteRows(play.notes, (line) => font.widthOfTextAtSize(line, 11), textWidth).slice(0, 12)
+    const notesHeight = 20 + rows.length * 16
+    const diagramTop = cursor - 4
+    const diagramBottom = 34 + notesHeight
+    const availH = Math.max(180, diagramTop - diagramBottom)
+    const image = diagrams.get(play.number)
+    if (image) {
+      const fit = contain(textWidth, availH, image.width, image.height)
+      const ix = MARGIN + (textWidth - fit.width) / 2
+      const iy = diagramBottom + (availH - fit.height) / 2
+      page.drawImage(image, { x: ix, y: iy, width: fit.width, height: fit.height })
+    }
+    let noteY = diagramBottom - 8
+    page.drawText('Notes', { x: MARGIN, y: noteY, size: 12, font: bold, color: ink })
+    noteY -= 16
+    for (const row of rows) {
+      if (row.kind === 'blank') {
+        page.drawLine({
+          start: { x: MARGIN, y: noteY },
+          end: { x: LETTER_W - MARGIN, y: noteY },
+          thickness: 0.6,
+          color: muted,
+          opacity: 0.55,
+        })
+      } else if (row.text) {
+        page.drawText(pdfSafe(row.text, ''), { x: MARGIN, y: noteY, size: 11, font, color: ink })
+      }
+      noteY -= 16
+    }
+    footer(page, font, pageNumber, muted)
+    pageNumber += 1
+  }
+
+  return doc.save()
+}
+
+async function svgToPng(svg: string): Promise<Uint8Array> {
+  let next = svg
+  for (const url of [END_ZONE_COLOR, END_ZONE_LINE]) {
+    if (!next.includes(url)) continue
+    const response = await fetch(url)
+    if (!response.ok) throw new Error('Could not load the team logo.')
+    const bytes = new Uint8Array(await response.arrayBuffer())
+    const mime = url.endsWith('.webp') ? 'image/webp' : 'image/png'
+    let binary = ''
+    const chunk = 0x8000
+    for (let i = 0; i < bytes.length; i += chunk) binary += String.fromCharCode(...bytes.subarray(i, i + chunk))
+    next = next.split(url).join(`data:${mime};base64,${btoa(binary)}`)
+  }
+  const blob = new Blob([next], { type: 'image/svg+xml;charset=utf-8' })
+  const objectUrl = URL.createObjectURL(blob)
+  try {
+    const image = new Image()
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve()
+      image.onerror = () => reject(new Error('Could not draw the play.'))
+      image.src = objectUrl
+    })
+    const canvas = document.createElement('canvas')
+    canvas.width = image.naturalWidth
+    canvas.height = image.naturalHeight
+    const context = canvas.getContext('2d')
+    if (!context) throw new Error('Canvas is unavailable in this browser.')
+    context.drawImage(image, 0, 0)
+    const png = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
+    if (!png) throw new Error('Could not draw the play.')
+    return new Uint8Array(await png.arrayBuffer())
+  } finally {
+    URL.revokeObjectURL(objectUrl)
+  }
+}
+
+/** Letter playbook from picked plays. Diagrams are high-res pictures of the field. */
+export async function renderPlaybookFile(input: {
+  title: string
+  plays: Play[]
+  style: ExportStyle
+  date: Date
+}): Promise<Uint8Array> {
+  const logoPng = await rasterPng(logoAsset(input.style))
+  const plays: PlaybookPagePlay[] = []
+  for (let index = 0; index < input.plays.length; index += 1) {
+    const play = input.plays[index]
+    plays.push({
+      number: index + 1,
+      name: play.name,
+      formation: play.formation,
+      formatLabel: formatLabel(play.format),
+      category: categoryOf(play),
+      notes: play.notes,
+      diagram: await svgToPng(renderDiagramSvg(play, input.style)),
+    })
+  }
+  return buildPlaybookDocument({
+    title: input.title,
+    dateLabel: coverDate(input.date),
+    style: input.style,
+    logoPng,
+    art: input.style === 'print' ? LINE_ART : COLOR_ART,
+    plays,
   })
 }

@@ -3,6 +3,7 @@ import { PLAY_CATEGORIES, categoryOf, groupPlays, type PlayCategory } from '../c
 import { fetchServerPlays, filterSavedPlays, playThumb, showsSavedSearch } from '../savedPlays'
 import type { Play } from '../types'
 import { formatShort } from '../types'
+import { tip } from '../hints'
 import { Sheet } from './Sheets'
 
 function age(timestamp: number): string {
@@ -33,6 +34,8 @@ export function PlaysSheet(props: {
   onDownloadAll: () => void
   onLoadFile: () => void
   onSignIn: () => void
+  onPlaybook: () => void
+  onNeedAccount: () => void
   onClose: () => void
 }) {
   const [server, setServer] = useState<Play[] | null>(null)
@@ -80,6 +83,14 @@ export function PlaysSheet(props: {
     <Sheet title="Plays" subtitle={props.signedIn ? 'Saved to your account' : undefined} onClose={props.onClose}>
       <button type="button" class="primary wide" onClick={props.onCreate}>
         New play
+      </button>
+      <button
+        type="button"
+        class="primary wide ghost"
+        {...tip(props.signedIn ? 'Pick plays for a PDF' : 'Make a free account')}
+        onClick={props.signedIn ? props.onPlaybook : props.onNeedAccount}
+      >
+        Make a playbook
       </button>
       <section class="current-play">
         <p class="field-label">This play</p>
