@@ -8,7 +8,6 @@ import {
   playbookTitle,
   setCategory,
   toggleId,
-  DEFAULT_PLAYBOOK_TITLE,
 } from '../playbookLayout'
 import type { ExportStyle } from '../exportSvg'
 import type { Play } from '../types'
@@ -17,13 +16,14 @@ import { Sheet } from './Sheets'
 
 export function PlaybookSheet(props: {
   localPlays: Play[]
+  defaultTitle: string
   busy: boolean
   onClose: () => void
   onMake: (choice: { title: string; style: ExportStyle; plays: Play[] }) => void
 }) {
   const [plays, setPlays] = useState<Play[] | null>(null)
   const [offline, setOffline] = useState(false)
-  const [title, setTitle] = useState(DEFAULT_PLAYBOOK_TITLE)
+  const [title, setTitle] = useState(() => playbookTitle(props.defaultTitle))
   const [style, setStyle] = useState<ExportStyle>('color')
   const [picked, setPicked] = useState<string[]>([])
   const localPlays = useRef(props.localPlays)

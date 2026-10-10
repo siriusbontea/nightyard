@@ -39,6 +39,18 @@ describe('playbook save and load', () => {
     expect(after.legacy).toBe(true)
     expect(after.plays.map((play) => play.id)).toEqual([first.plays[0].id])
     expect(after.name).toBe('Friday night')
+    expect(after.namedAt).toBe(0)
+  })
+
+  it('remembers when the playbook was named', async () => {
+    const first = await loadPlaybook()
+    await savePlay(first.plays[0])
+    await savePlaybookName('Friday night', true, 80)
+    const loaded = await loadPlaybook()
+    expect(loaded.name).toBe('Friday night')
+    expect(loaded.namedAt).toBe(80)
+    await savePlaybookName('Friday night')
+    expect((await loadPlaybook()).namedAt).toBe(80)
   })
 
   it('does not resurrect the starter after the book has been seeded and emptied', async () => {

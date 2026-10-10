@@ -448,11 +448,16 @@ export function App() {
       <aside class="desk-book">
         <div class="desk-head">
           <p class="brand">Night Yard</p>
-          <label class="field-label">
-            Plays
+          <label class="field-label book-name">
+            <span class="book-name-label">
+              <PencilIcon />
+              Playbook name
+            </span>
             <input
               value={book.bookName}
               maxLength={60}
+              aria-label="Playbook name"
+              data-tip="Name your playbook"
               onInput={(event) => book.renameBook((event.currentTarget as HTMLInputElement).value)}
             />
           </label>
@@ -741,7 +746,13 @@ export function App() {
         />
       ) : null}
       {sheet === 'playbook' && book.accountName ? (
-        <PlaybookSheet localPlays={book.plays} busy={busy} onClose={() => setSheet(null)} onMake={makePlaybook} />
+        <PlaybookSheet
+          localPlays={book.plays}
+          defaultTitle={book.bookName}
+          busy={busy}
+          onClose={() => setSheet(null)}
+          onMake={makePlaybook}
+        />
       ) : null}
       {sheet === 'play' ? (
         <PlaySettings
@@ -912,6 +923,15 @@ export function App() {
 function accountInitial(name: string | null): string {
   const letter = name?.trim().charAt(0) ?? ''
   return /[a-z0-9]/i.test(letter) ? letter.toUpperCase() : ''
+}
+
+function PencilIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <path d="M4 16.5V20h3.5L18 9.5 14.5 6 4 16.5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+      <path d="M13 7.5l3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.8" />
+    </svg>
+  )
 }
 
 function PersonIcon() {

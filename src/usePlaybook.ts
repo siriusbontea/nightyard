@@ -74,6 +74,7 @@ export function usePlaybook() {
   const memoryOnlyRef = useRef(false)
   const guestRef = useRef(false)
   const bookNameRef = useRef(bookName)
+  const bookNamedAtRef = useRef(0)
   const signedRef = useRef(getSyncState().signedIn)
   const tipped = useRef(autosaveTipSeen())
   playsRef.current = plays
@@ -147,7 +148,16 @@ export function usePlaybook() {
     let cancel = false
     let stop = () => {}
     const start = () => {
-      stop = bootSync({ getPlays: () => playsRef.current, applyPlays: acceptPlays })
+      stop = bootSync({
+        getPlays: () => playsRef.current,
+        applyPlays: acceptPlays,
+        getBookName: () => ({ name: bookNameRef.current, namedAt: bookNamedAtRef.current }),
+        applyBookName: (name, namedAt) => {
+          bookNamedAtRef.current = namedAt
+          setBookName(name)
+          if (keepsLocal()) void savePlaybookName(name, true, namedAt)
+        },
+      })
     }
     loadPlaybook()
       .then((loaded) => {
@@ -155,6 +165,7 @@ export function usePlaybook() {
         const opened = loaded.plays[0] ? createHistory(loaded.plays[0]) : null
         playsRef.current = loaded.plays
         historyRef.current = opened
+        bookNamedAtRef.current = loaded.namedAt
         setBookName(loaded.name)
         setPlays(loaded.plays)
         setHistory(opened)
@@ -213,7 +224,7 @@ export function usePlaybook() {
     void (async () => {
       try {
         for (const item of plays) await savePlay(item)
-        await savePlaybookName(bookNameRef.current)
+        await savePlaybookName(bookNameRef.current, true, bookNamedAtRef.current)
         if (cancel) return
         guestRef.current = false
         setGuest(false)
@@ -360,8 +371,16 @@ export function usePlaybook() {
 
   async function renameBook(name: string) {
     const trimmed = name.trim() || 'Night Yard'
+    const namedAt = Date.now()
+    bookNamedAtRef.current = namedAt
     setBookName(trimmed)
-    if (keepsLocal()) await savePlaybookName(trimmed).catch(() => setToast('Could not rename the plays.'))
+    if (!keepsLocal()) return
+    try {
+      await savePlaybookName(trimmed, true, namedAt)
+      scheduleSync()
+    } catch {
+      setToast('Could not rename the plays.')
+    }
   }
 
   async function openSaved(incoming: Play) {
@@ -390,7 +409,11 @@ export function usePlaybook() {
     const bundle = parseBundle(text)
     if (keepsLocal()) {
       for (const item of bundle.plays) await savePlay(item)
-      if (playsRef.current.length === 0 && bundle.kind === 'playbook') await savePlaybookName(bundle.name)
+      if (playsRef.current.length === 0 && bundle.kind === 'playbook') {
+        const namedAt = Date.now()
+        bookNamedAtRef.current = namedAt
+        await savePlaybookName(bundle.name, true, namedAt)
+      }
     }
     const merged = [...playsRef.current]
     for (const item of bundle.plays) {

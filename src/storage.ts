@@ -9,6 +9,7 @@ interface MetaRecord {
   key: 'playbook'
   name: string
   seeded: boolean
+  namedAt?: number
 }
 
 let dbPromise: Promise<IDBDatabase> | null = null
@@ -62,6 +63,7 @@ export async function loadPlaybook(): Promise<{
   freshSeed: { id: string; updatedAt: number } | null
   /** True when this phone already had a book. Those plays stay on the phone. */
   legacy: boolean
+  namedAt: number
 }> {
   const db = await openDb()
   const playTx = db.transaction('plays', 'readonly')
@@ -80,9 +82,10 @@ export async function loadPlaybook(): Promise<{
       plays: [starter],
       freshSeed: { id: starter.id, updatedAt: starter.updatedAt },
       legacy: false,
+      namedAt: 0,
     }
   }
-  return { name: meta?.name || 'Night Yard', plays, freshSeed: null, legacy: true }
+  return { name: meta?.name || 'Night Yard', plays, freshSeed: null, legacy: true, namedAt: meta?.namedAt ?? 0 }
 }
 
 export async function savePlay(play: Play): Promise<void> {
@@ -99,10 +102,17 @@ export async function deletePlay(id: string): Promise<void> {
   await transactionDone(tx)
 }
 
-export async function savePlaybookName(name: string, seeded = true): Promise<void> {
+export async function savePlaybookName(name: string, seeded = true, namedAt?: number): Promise<void> {
   const db = await openDb()
+  const readTx = db.transaction('meta', 'readonly')
+  const previous = (await requestToPromise(readTx.objectStore('meta').get('playbook'))) as MetaRecord | undefined
   const tx = db.transaction('meta', 'readwrite')
-  const record: MetaRecord = { key: 'playbook', name: name.trim() || 'Night Yard', seeded }
+  const record: MetaRecord = {
+    key: 'playbook',
+    name: name.trim() || 'Night Yard',
+    seeded,
+    namedAt: namedAt ?? previous?.namedAt ?? 0,
+  }
   tx.objectStore('meta').put(record)
   await transactionDone(tx)
 }

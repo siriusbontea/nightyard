@@ -33,6 +33,10 @@ describe('field hints', () => {
       'Take this play off',
       'White pages for printing',
       'Save the playbook',
+      'Name your playbook',
+      'Find a play',
+      'Play choices',
+      'Show or hide these',
     ]) {
       expect(text.split(/\s+/).length).toBeLessThanOrEqual(8)
       expect(tip(text)['aria-label']).toBe(text)

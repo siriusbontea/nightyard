@@ -14,6 +14,7 @@ Migration: `pb_migrations/1760000000_night_yard_accounts.js`.
 - Password length is at least 8.
 - Username is 3–30 characters: a letter or number, then letters, numbers, `.`, `_`, or `-`. It is unique.
 - A person can create an account. After that they can only read and update their own user. They cannot delete it through the API.
+- `playbook_name` (text, optional, up to 60 characters) is the name shown on the desktop Plays list. `playbook_named_at` (number, unix milliseconds) says which copy is newer. The phone uploads a newer name and takes the account name when the account copy is newer.
 
 `plays`:
 

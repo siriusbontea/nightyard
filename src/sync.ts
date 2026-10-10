@@ -1,3 +1,4 @@
+import { chooseBookName, type BookNameStamp } from './bookName'
 import { pb } from './pb'
 import { planMerge, remoteRow, withoutUntouchedSeed, type Tombstone } from './syncMerge'
 import { loadTombstones, saveTombstones } from './tombstones'
@@ -14,6 +15,8 @@ export interface SyncState {
 export interface SyncHandlers {
   getPlays: () => Play[]
   applyPlays: (plays: Play[]) => void
+  getBookName: () => BookNameStamp
+  applyBookName: (name: string, namedAt: number) => void
 }
 
 type Listener = (state: SyncState) => void
@@ -136,11 +139,33 @@ async function runSync() {
       await writePlay(ownerId, item.playId, { id: item.playId, updatedAt: item.updatedAt }, true)
     }
     saveTombstones([])
+    try {
+      await reconcileBookName(ownerId)
+    } catch {
+      /* Plays are already on the account. The name field arrives when the server restarts. */
+    }
     phase = 'synced'
   } catch {
     phase = 'pending'
   }
   publish()
+}
+
+async function reconcileBookName(ownerId: string) {
+  const bound = handlers
+  if (!bound) return
+  const user = await pb.collection('users').getOne(ownerId)
+  const remoteName = typeof user.playbook_name === 'string' ? user.playbook_name : ''
+  const remoteAt = typeof user.playbook_named_at === 'number' ? user.playbook_named_at : 0
+  const local = bound.getBookName()
+  const choice = chooseBookName(local, { name: remoteName, namedAt: remoteAt })
+  if (choice.push) {
+    await pb.collection('users').update(ownerId, {
+      playbook_name: choice.name,
+      playbook_named_at: choice.namedAt,
+    })
+  }
+  if (choice.name !== local.name || choice.namedAt !== local.namedAt) bound.applyBookName(choice.name, choice.namedAt)
 }
 
 export function syncNow(): Promise<void> {
