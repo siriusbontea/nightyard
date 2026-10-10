@@ -3,7 +3,7 @@ import { applyPositions, fieldMarkup } from '../fieldMarkup'
 import { DRAW_PIXELS, FIELD_WIDTH, clamp, dist, moveStrokePoint, setStrokeCurve, simplifyPath, viewSize, type Camera } from '../geometry'
 import { clientToField, hitTest } from '../hit'
 import { playerAtTime } from '../playback'
-import { replaceStroke, setStroke, translatePlayer } from '../play'
+import { replaceMainStroke, replaceStroke, setStroke, translatePlayer } from '../play'
 import { NIGHT } from '../theme'
 import type { Play, Point, Stroke, StrokeKind } from '../types'
 import { uid } from '../id'
@@ -22,6 +22,9 @@ interface FieldProps {
   onSelect: (playerId: string | null, strokeId: string | null) => void
   onEditPlayer: (playerId: string) => void
   onStopPlayback: () => void
+  /** One new finger path for this player. Does not change the Move or Draw tool. */
+  redrawPlayerId?: string | null
+  onRedrawDone?: () => void
 }
 
 type Gesture =
@@ -160,14 +163,17 @@ export function Field(props: FieldProps) {
         }
         return
       }
-      if (hit.type === 'player' && current.tool === 'draw') {
+      if (hit.type === 'player' && current.redrawPlayerId && hit.id !== current.redrawPlayerId) {
+        current.onRedrawDone?.()
+      }
+      if (hit.type === 'player' && (current.tool === 'draw' || current.redrawPlayerId === hit.id)) {
         const player = current.play.players.find((item) => item.id === hit.id)
         if (!player) return
         gesturing.current = true
         active = {
           type: 'draw',
           playerId: player.id,
-          kind: current.strokeKind,
+          kind: current.redrawPlayerId === player.id ? 'route' : current.strokeKind,
           raw: [{ x: player.x, y: player.y }],
           pointerId: event.pointerId,
           snapshot: current.play,
@@ -219,7 +225,8 @@ export function Field(props: FieldProps) {
           curves: gesture.raw.slice(1).map(() => null),
           preset: null,
         }
-        paint(setStroke(gesture.snapshot, draft), false, 0)
+        const preview = draft.kind === 'motion' ? setStroke(gesture.snapshot, draft) : replaceMainStroke(gesture.snapshot, draft)
+        paint(preview, false, 0)
         return
       }
       if (gesture.type === 'move') {
@@ -277,14 +284,17 @@ export function Field(props: FieldProps) {
           preset: null,
         }
         current.onSelect(player.id, stroke.id)
-        current.onCommit(setStroke(finished.snapshot, stroke))
+        const next = stroke.kind === 'motion' ? setStroke(finished.snapshot, stroke) : replaceMainStroke(finished.snapshot, stroke)
+        current.onCommit(next)
+        if (current.redrawPlayerId) current.onRedrawDone?.()
         return
       }
       if (finished.type === 'move') {
         if (!finished.moved || !finished.latest) {
           const already = current.selectedPlayerId === finished.playerId
-          current.onSelect(finished.playerId, primaryStrokeId(finished.snapshot, finished.playerId))
-          if (tapOpensPosition(event.pointerType, already)) current.onEditPlayer(finished.playerId)
+          const lineId = primaryStrokeId(finished.snapshot, finished.playerId)
+          current.onSelect(finished.playerId, lineId)
+          if (!lineId && tapOpensPosition(event.pointerType, already)) current.onEditPlayer(finished.playerId)
           paint(finished.snapshot, true, 0)
           return
         }

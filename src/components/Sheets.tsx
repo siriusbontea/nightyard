@@ -3,7 +3,9 @@ import type { ComponentChildren } from 'preact'
 import { formationsFor, shapeFor } from '../formations'
 import { applyFormation, presetOnPlayer, setOurSide, setShowDefense } from '../play'
 import { applyPosition, positionSelected, positionsFor } from '../positions'
-import { ROUTE_PRESETS, plainPreset, presetLabel } from '../presets'
+import { assignmentsFor, plainPreset, presetLabel } from '../presets'
+import { PLAY_CATEGORIES, categoryOf } from '../categories'
+import type { BreakSide } from '../play'
 import type { Play, Player, PresetId } from '../types'
 import { FORMATS, formatShort, formatStyle, ourSideOf, type FormatId } from '../types'
 import { PathPreview } from './PathPreview'
@@ -137,6 +139,20 @@ export function PlaySettings(props: { play: Play; onChange: (play: Play) => void
           </button>
         ))}
       </div>
+      <p class="field-label">Kind of play</p>
+      <div class="cat-grid">
+        {PLAY_CATEGORIES.map((category) => (
+          <button
+            key={category}
+            type="button"
+            class="choice"
+            aria-pressed={categoryOf(play) === category}
+            onClick={() => props.onChange({ ...edited(), category })}
+          >
+            {category}
+          </button>
+        ))}
+      </div>
       <p class="field-label">Start line</p>
       <div class="chips">
         {[5, 10, 15, 20, 25, 30, 40, 50].map((los) => (
@@ -168,8 +184,14 @@ export function PlaySettings(props: { play: Play; onChange: (play: Play) => void
 export function PresetSheet(props: {
   play: Play
   selectedId: string | null
+  breakSide: BreakSide
   onSelect: (id: string) => void
-  onApply: (playerId: string, preset: (typeof ROUTE_PRESETS)[number]['id']) => void
+  onBreakSide: (side: BreakSide) => void
+  onApply: (playerId: string, preset: PresetId) => void
+  onMan: (playerId: string, targetId: string) => void
+  onRedraw: (playerId: string) => void
+  onRemove: (playerId: string) => void
+  onFlip: (playerId: string) => void
   onClose: () => void
 }) {
   const visible = props.play.players.filter((player) => player.side === ourSideOf(props.play) || props.play.showDefense)
@@ -177,6 +199,9 @@ export function PresetSheet(props: {
   const [picked, setPicked] = useState<{ playerId: string; preset: PresetId } | null>(null)
   const fromPlay = selected ? presetOnPlayer(props.play, selected.id) : null
   const highlighted = selected && picked?.playerId === selected.id ? picked.preset : fromPlay
+  const jobs = selected ? assignmentsFor(selected) : []
+  const targets = selected ? props.play.players.filter((player) => player.side !== selected.side && (player.side === ourSideOf(props.play) || props.play.showDefense)) : []
+  const hasLine = selected ? props.play.strokes.some((stroke) => stroke.playerId === selected.id) : false
   return (
     <Sheet title="Paths" onClose={props.onClose}>
       <p class="field-label">Who</p>
@@ -197,8 +222,34 @@ export function PresetSheet(props: {
       {selected ? (
         <>
           <p class="field-label">For {selected.label}</p>
+          <div class="break-row" role="group" aria-label="Which way">
+            <button type="button" class="choice" aria-pressed={props.breakSide === 'left'} onClick={() => props.onBreakSide('left')}>
+              ← Left
+            </button>
+            <button type="button" class="choice" aria-pressed={props.breakSide === 'right'} onClick={() => props.onBreakSide('right')}>
+              Right →
+            </button>
+          </div>
+          {hasLine ? (
+            <div class="route-options">
+              {selected.side === 'defense' ? null : (
+                <button type="button" onClick={() => props.onApply(selected.id, 'block')}>
+                  Block
+                </button>
+              )}
+              <button type="button" onClick={() => props.onRedraw(selected.id)}>
+                Redraw
+              </button>
+              <button type="button" onClick={() => props.onRemove(selected.id)}>
+                Remove route
+              </button>
+              <button type="button" onClick={() => props.onFlip(selected.id)}>
+                Flip
+              </button>
+            </div>
+          ) : null}
           <div class="preset-grid">
-            {ROUTE_PRESETS.map((preset) => (
+            {jobs.map((preset) => (
               <button
                 key={preset.id}
                 type="button"
@@ -206,15 +257,28 @@ export function PresetSheet(props: {
                 aria-pressed={preset.id === highlighted}
                 onClick={() => {
                   setPicked({ playerId: selected.id, preset: preset.id })
-                  props.onApply(selected.id, preset.id)
+                  if (preset.id !== 'man') props.onApply(selected.id, preset.id)
                 }}
               >
-                <PathPreview play={props.play} player={selected} preset={preset.id} />
+                <PathPreview play={props.play} player={selected} preset={preset.id} side={props.breakSide} />
                 <span>{preset.label}</span>
                 <small>{plainPreset(preset.id)}</small>
               </button>
             ))}
           </div>
+          {highlighted === 'man' ? (
+            <>
+              <p class="field-label">Cover who?</p>
+              <div class="chips">
+                {targets.map((player) => (
+                  <button key={player.id} type="button" class="chip player-chip" onClick={() => props.onMan(selected.id, player.id)}>
+                    <i style={{ background: player.color }} />
+                    {player.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : null}
         </>
       ) : (
         <p class="empty-copy">Tap a player first.</p>
@@ -333,6 +397,7 @@ export function MoreSheet(props: {
   onDelete: () => void
   onExport: () => void
   onReset: () => void
+  onFlip: () => void
   onClose: () => void
 }) {
   const [askReset, setAskReset] = useState(false)
@@ -366,8 +431,12 @@ export function MoreSheet(props: {
         Reset
         <small>Back to how it started</small>
       </button>
+      <button type="button" class="row-btn" onClick={props.onFlip}>
+        Flip play
+        <small>Mirror everyone the other way</small>
+      </button>
       <button type="button" class="row-btn" onClick={props.onExport}>
-        Save pictures and files
+        Download pictures
       </button>
       <button type="button" class="row-btn" onClick={props.onDuplicate}>
         Copy this play
@@ -387,8 +456,6 @@ export function ExportSheet(props: {
   onToggleNotes: () => void
   onToggleAssignments: () => void
   onPng: (style: 'print' | 'color') => void
-  onJsonPlay: () => void
-  onJsonBook: () => void
   onClose: () => void
 }) {
   return (
@@ -407,15 +474,7 @@ export function ExportSheet(props: {
       <button type="button" class="primary wide ghost" disabled={props.busy} onClick={() => props.onPng('color')}>
         Download color picture
       </button>
-      <p class="fine">Pictures are letter size. White is for printing. Color looks like the field.</p>
-      <p class="backup-label">Backup files</p>
-      <button type="button" class="primary wide ghost" onClick={props.onJsonPlay}>
-        Download this play (file)
-      </button>
-      <button type="button" class="primary wide ghost" onClick={props.onJsonBook}>
-        Download all plays (file)
-      </button>
-      <p class="fine">Your plays already save to your account. These make a file on this phone.</p>
+      <p class="fine">Pictures are letter size. White is for printing. Color looks like the field. Play files are in Plays.</p>
     </Sheet>
   )
 }

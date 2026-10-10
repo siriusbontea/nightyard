@@ -4,11 +4,18 @@ import { MOTION_SPLIT, playerAtTime } from './playback'
 import { applyPosition } from './positions'
 import {
   applyFormation,
+  applyMan,
   applyPreset,
+  defaultBreakSide,
+  flipPlay,
+  mainStroke,
+  mirrorPlayerRoutes,
   presetOnPlayer,
+  removeRoute,
   presetOrigin,
   isPlayerShown,
   setOurSide,
+  setShowDefense,
   updatePlayer,
   assignmentRows,
   createPlay,
@@ -26,8 +33,12 @@ import {
   translatePlayer,
 } from './play'
 import { OUR_COLOR, THEIR_COLOR, defenseFor, formationsFor } from './formations'
-import { FIELD_WIDTH, PLAYER_R } from './geometry'
-import { presetFromPlayer, presetPath } from './presets'
+import { EXPORT_CAMERA, FIELD_WIDTH, PLAYER_R } from './geometry'
+import { assignmentsFor, presetFromPlayer, presetPath } from './presets'
+import { fieldMarkup } from './fieldMarkup'
+import { NIGHT, PRINT } from './theme'
+import { renderExportSvg } from './exportSvg'
+import { categoryOf, groupPlays } from './categories'
 import { FORMATS, type Player, type Stroke } from './types'
 
 describe('play model', () => {
@@ -349,5 +360,123 @@ describe('playback', () => {
     ])
     const justAfter = playerAtTime(player, [motion, route], MOTION_SPLIT + 0.01)
     expect(justAfter.x).toBeGreaterThan(14)
+  })
+
+  it('replaces a run with a block instead of stacking both', () => {
+    const play = showcasePlay()
+    const back = play.players.find((player) => player.label === 'RB')!
+    expect(mainStroke(play, back.id)?.kind).toBe('run')
+    const next = applyPreset(play, back.id, 'block')
+    const lines = next.strokes.filter((stroke) => stroke.playerId === back.id)
+    expect(lines).toHaveLength(1)
+    expect(lines[0].kind).toBe('block')
+    expect(lines[0].preset).toBe('block')
+    const gone = removeRoute(next, back.id)
+    expect(gone.strokes.some((stroke) => stroke.playerId === back.id)).toBe(false)
+  })
+
+  it('keeps jet motion when the route after it changes', () => {
+    const play = showcasePlay()
+    const x = play.players.find((player) => player.label === 'X')!
+    const next = applyPreset(play, x.id, 'slant', 'left')
+    expect(next.strokes.filter((stroke) => stroke.playerId === x.id && stroke.kind === 'motion')).toHaveLength(1)
+    const slant = mainStroke(next, x.id)!
+    expect(slant.preset).toBe('slant')
+    expect(slant.points.at(-1)!.x).toBeLessThan(slant.points[0].x)
+  })
+
+  it('mirrors one player and the whole play, and leaves a go route straight', () => {
+    const play = createPlay({ format: '11v11', formationId: 'shotgun-trips', name: 'Stick' })
+    const y = play.players.find((player) => player.label === 'Y')!
+    const withSlant = applyPreset(play, y.id, 'slant', 'right')
+    const flipped = mirrorPlayerRoutes(withSlant, y.id)
+    const before = mainStroke(withSlant, y.id)!
+    const after = mainStroke(flipped, y.id)!
+    expect(after.points.at(-1)!.x).toBeLessThan(before.points[0].x)
+    expect(after.points[0].x).toBeCloseTo(y.x)
+    const z = play.players.find((player) => player.label === 'Z')!
+    const withGo = applyPreset(play, z.id, 'go')
+    const stillGo = mirrorPlayerRoutes(withGo, z.id)
+    expect(mainStroke(stillGo, z.id)!.points[1].x).toBeCloseTo(z.x)
+    const mirrored = flipPlay(withSlant)
+    expect(mirrored.players.find((player) => player.id === y.id)!.x).toBeCloseTo(FIELD_WIDTH - y.x)
+    expect(mainStroke(mirrored, y.id)!.points[0].x).toBeCloseTo(FIELD_WIDTH - before.points[0].x)
+  })
+
+  it('starts Corndog and Stick as pass plays, and a defense look as Defense', () => {
+    expect(categoryOf(showcasePlay())).toBe('Pass play')
+    expect(categoryOf(createPlay({ format: '11v11', name: 'Stick' }))).toBe('Pass play')
+    expect(defaultBreakSide(10)).toBe('right')
+    expect(defaultBreakSide(FIELD_WIDTH - 4)).toBe('left')
+    const defense = setOurSide(createPlay({ format: '11v11', name: 'Cover 3' }), 'defense')
+    expect(categoryOf(defense)).toBe('Defense')
+    const old = sanitizePlay({ ...JSON.parse(serializePlay(showcasePlay())).play, category: undefined })
+    expect(old && categoryOf(old)).toBe('Pass play')
+    const labeled = sanitizePlay({ ...JSON.parse(serializePlay(showcasePlay())).play, category: 'Trick play' })
+    expect(labeled && categoryOf(labeled)).toBe('Trick play')
+    const groups = groupPlays([showcasePlay(), defense], 'All')
+    expect(groups.map((group) => group.category)).toEqual(['Pass play', 'Defense'])
+  })
+
+  it('gives defenders zone and rush jobs, and leaves Corndog routes alone', () => {
+    const offense = createPlay({ format: '11v11', name: 'Stick' })
+    const wr = offense.players.find((player) => player.role === 'wr')!
+    const wrJobs = assignmentsFor(wr).map((job) => job.id)
+    expect(wrJobs).toContain('slant')
+    expect(wrJobs).toContain('block')
+    expect(wrJobs).not.toContain('zone-third')
+
+    const shown = setShowDefense(offense, true)
+    expect(shown.ourSide).toBe('offense')
+    const lime = shown.players.find((player) => player.side === 'defense' && player.role === 'db')!
+    const dl = shown.players.find((player) => player.side === 'defense' && player.role === 'dl')!
+    expect(assignmentsFor(lime).map((job) => job.id)).not.toContain('slant')
+    expect(assignmentsFor(lime).map((job) => job.id)).toContain('zone-half')
+    expect(assignmentsFor(dl)[0].id).toBe('blitz-a')
+    expect(shown.strokes.some((stroke) => stroke.preset === 'blitz-a' || stroke.preset === 'blitz-b' || stroke.preset === 'blitz-edge')).toBe(true)
+    expect(shown.strokes.some((stroke) => stroke.preset?.startsWith('zone-'))).toBe(true)
+    expect(shown.strokes.some((stroke) => stroke.preset === 'slant' || stroke.preset === 'go' || stroke.preset === 'post')).toBe(false)
+
+    const corn = showcasePlay()
+    expect(setShowDefense(corn, true).strokes).toHaveLength(corn.strokes.length)
+    expect(corn.strokes.some((stroke) => stroke.preset === 'zone-third')).toBe(false)
+
+    const defense = setOurSide(createPlay({ format: '11v11', name: 'Cover 3' }), 'defense')
+    expect(defense.strokes.some((stroke) => stroke.preset === 'blitz-edge' || stroke.preset === 'blitz-a')).toBe(true)
+    expect(defense.strokes.some((stroke) => stroke.preset === 'zone-third' || stroke.preset === 'zone-half' || stroke.preset === 'zone-hook')).toBe(true)
+    const back = setOurSide(defense, 'offense')
+    expect(back.ourSide).toBe('offense')
+    const limeJobs = back.strokes.filter((stroke) => back.players.find((player) => player.id === stroke.playerId)?.side === 'defense')
+    expect(limeJobs.some((stroke) => stroke.preset === 'blitz-a' || stroke.preset === 'blitz-edge')).toBe(true)
+    expect(limeJobs.some((stroke) => stroke.preset?.startsWith('zone-'))).toBe(true)
+    expect(limeJobs.some((stroke) => stroke.preset === 'slant' || stroke.preset === 'go')).toBe(false)
+
+    const left = presetFromPlayer('zone-third', lime, undefined, -1, 20)
+    const right = presetFromPlayer('zone-third', lime, undefined, 1, 20)
+    expect(left.points[1].x).toBeLessThan(right.points[1].x)
+    const rush = applyPreset(shown, dl.id, 'blitz-a', 'left')
+    expect(mainStroke(rush, dl.id)!.points.at(-1)!.y).toBeLessThan(0)
+
+    const wrTarget = shown.players.find((player) => player.side === 'offense' && player.role === 'wr')!
+    const man = applyMan(shown, lime.id, wrTarget.id)
+    expect(mainStroke(man, lime.id)?.preset).toBe('man')
+    expect(mainStroke(man, lime.id)?.coverId).toBe(wrTarget.id)
+
+    const zoned = applyPreset(shown, lime.id, 'zone-third', 'left')
+    const color = fieldMarkup({ play: zoned, camera: EXPORT_CAMERA, theme: NIGHT })
+    expect(color).toContain('data-preset="zone-third"')
+    expect(color).toContain('data-zone="1"')
+    expect(color).toContain('<ellipse')
+    const printed = fieldMarkup({ play: zoned, camera: EXPORT_CAMERA, theme: PRINT })
+    expect(printed).toMatch(/<ellipse[^>]*fill="none"/)
+    expect(printed).toMatch(/<ellipse[^>]*stroke="#111111"/)
+    const blitzSvg = fieldMarkup({ play: rush, camera: EXPORT_CAMERA, theme: NIGHT })
+    const blitz = blitzSvg.split('data-preset="blitz-a"')[1]?.slice(0, 900) ?? ''
+    expect(blitz).toContain(' Z')
+    expect(blitz).not.toContain('<ellipse')
+    const manSvg = fieldMarkup({ play: man, camera: EXPORT_CAMERA, theme: NIGHT })
+    expect(manSvg).toContain('data-preset="man"')
+    expect(manSvg).toContain('stroke-dasharray')
+    expect(renderExportSvg(corn, 'print')).toContain('Pass play')
   })
 })

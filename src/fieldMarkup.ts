@@ -3,6 +3,7 @@ import { END_ZONE_ART_H, END_ZONE_ART_W, END_ZONE_COLOR, END_ZONE_LINE } from '.
 import { END_ZONE_DEPTH, FIELD_LENGTH, HASH_INSET, displayedYard, fieldYAt, numberArrow } from './fieldMarks'
 import { FIELD_WIDTH, PLAYER_R, fieldToSvg, segmentTangent, viewSize, type Camera } from './geometry'
 import { isPlayerShown } from './play'
+import { isZonePreset, zoneRadius } from './presets'
 import { ACCENT, type Theme } from './theme'
 import { ourSideOf, type Play, type Player, type Point, type Stroke } from './types'
 
@@ -47,6 +48,13 @@ function arrowPath(tip: Point, dir: Point, size: number): string {
 }
 
 function routeMarkup(stroke: Stroke, play: Play, camera: Camera, theme: Theme, selected: boolean): string {
+  if (stroke.preset === 'man' && stroke.coverId) {
+    const owner = play.players.find((item) => item.id === stroke.playerId)
+    const target = play.players.find((item) => item.id === stroke.coverId)
+    if (owner && target) {
+      stroke = { ...stroke, points: [{ x: owner.x, y: owner.y }, { x: target.x, y: target.y }], curves: [null] }
+    }
+  }
   if (stroke.points.length < 2) return ''
   const player = play.players.find((item) => item.id === stroke.playerId)
   const color = theme.outlineOnly ? '#111111' : safeColor(player?.routeColor || player?.color || '#38bdf8')
@@ -54,14 +62,22 @@ function routeMarkup(stroke: Stroke, play: Play, camera: Camera, theme: Theme, s
   const inner = (stroke.kind === 'run' ? 0.62 : 0.5) * camera.scale
   const outer = inner + 0.28 * camera.scale
   const d = pathD(stroke, camera)
-  const dash = stroke.kind === 'motion' ? ` stroke-dasharray="${(0.95 * camera.scale).toFixed(1)} ${(0.68 * camera.scale).toFixed(1)}"` : ''
+  const man = stroke.preset === 'man'
+  const dashed = stroke.kind === 'motion' || man
+  const dash = dashed ? ` stroke-dasharray="${(0.95 * camera.scale).toFixed(1)} ${(0.68 * camera.scale).toFixed(1)}"` : ''
   const end = stroke.points[stroke.points.length - 1]
   const prev = stroke.points[stroke.points.length - 2]
   const fieldDir = segmentTangent(prev, end, stroke.curves[stroke.curves.length - 1] ?? null, 1)
   const dir = { x: fieldDir.x, y: -fieldDir.y }
   const tip = fieldToSvg(end, camera)
+  const zone = zoneRadius(stroke.preset)
   let cap = ''
-  if (stroke.kind === 'block') {
+  if (zone) {
+    const fill = theme.outlineOnly ? 'none' : color
+    const opacity = theme.outlineOnly ? '' : ' fill-opacity="0.2"'
+    const ink = theme.outlineOnly ? '#111111' : color
+    cap = `<ellipse cx="${tip.x.toFixed(1)}" cy="${tip.y.toFixed(1)}" rx="${(zone.rx * camera.scale).toFixed(1)}" ry="${(zone.ry * camera.scale).toFixed(1)}" fill="${fill}"${opacity} stroke="${ink}" stroke-width="${(0.28 * camera.scale).toFixed(1)}"/>`
+  } else if (stroke.preset === 'contain' || stroke.kind === 'block') {
     const len = Math.hypot(dir.x, dir.y) || 1
     const px = -dir.y / len
     const py = dir.x / len
@@ -72,12 +88,12 @@ function routeMarkup(stroke: Stroke, play: Play, camera: Camera, theme: Theme, s
     const y2 = tip.y - py * half
     cap = `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${outline}" stroke-width="${(outer + 1).toFixed(1)}" stroke-linecap="round"/>
       <line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${color}" stroke-width="${inner.toFixed(1)}" stroke-linecap="round"/>`
-  } else {
+  } else if (!man) {
     const size = 1.85 * camera.scale
     cap = `<path d="${arrowPath(tip, dir, size + 2.2)}" fill="${outline}"/><path d="${arrowPath(tip, dir, size)}" fill="${color}"/>`
   }
   const emphasis = selected ? 1.15 : 1
-  return `<g data-stroke-id="${stroke.id}">
+  return `<g data-stroke-id="${stroke.id}"${stroke.preset ? ` data-preset="${stroke.preset}"` : ''}${isZonePreset(stroke.preset) ? ' data-zone="1"' : ''}>
     <path d="${d}" fill="none" stroke="${outline}" stroke-width="${(outer * emphasis).toFixed(2)}" stroke-linecap="round" stroke-linejoin="round"${dash}/>
     <path d="${d}" fill="none" stroke="${color}" stroke-width="${(inner * emphasis).toFixed(2)}" stroke-linecap="round" stroke-linejoin="round"${dash}/>
     ${cap}

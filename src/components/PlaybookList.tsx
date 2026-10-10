@@ -1,4 +1,5 @@
 import { useState } from 'preact/hooks'
+import { PLAY_CATEGORIES, groupPlays, type PlayCategory } from '../categories'
 import type { Play } from '../types'
 import { formatShort } from '../types'
 
@@ -21,13 +22,15 @@ export function PlaybookList(props: {
   onDuplicate: (id: string) => void
   onDelete: (id: string) => void
   onCreate: () => void
-  onImport: () => void
+  onImport?: () => void
   saveStatus?: string
   saveKind?: string
   onSaveStatus?: () => void
 }) {
   const [renaming, setRenaming] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
+  const [filter, setFilter] = useState<PlayCategory | 'All'>('All')
+  const groups = groupPlays(props.plays, filter)
 
   return (
     <div class="book-list">
@@ -35,15 +38,30 @@ export function PlaybookList(props: {
         <button type="button" class="primary" onClick={props.onCreate}>
           New play
         </button>
-        <button type="button" class="primary ghost" onClick={props.onImport}>
-          Open a saved play
+        {props.onImport ? (
+          <button type="button" class="primary ghost" onClick={props.onImport}>
+            Open a saved play
+          </button>
+        ) : null}
+      </div>
+      <div class="filter-row">
+        <button type="button" class="chip" aria-pressed={filter === 'All'} onClick={() => setFilter('All')}>
+          All
         </button>
+        {PLAY_CATEGORIES.map((category) => (
+          <button key={category} type="button" class="chip" aria-pressed={filter === category} onClick={() => setFilter(category)}>
+            {category}
+          </button>
+        ))}
       </div>
       {props.plays.length === 0 ? (
         <p class="empty-copy">No plays yet. Tap New play.</p>
       ) : (
-        <ul>
-          {props.plays.map((play) => {
+        groups.map((group) => (
+          <div key={group.category}>
+            <p class="group-label">{group.category}</p>
+            <ul>
+          {group.plays.map((play) => {
             const current = play.id === props.currentId
             return (
               <li key={play.id} class={current ? 'play-row current' : 'play-row'}>
@@ -104,7 +122,9 @@ export function PlaybookList(props: {
               </li>
             )
           })}
-        </ul>
+            </ul>
+          </div>
+        ))
       )}
     </div>
   )

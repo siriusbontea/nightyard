@@ -27,6 +27,17 @@ export type PresetId =
   | 'block'
   | 'run'
   | 'motion'
+  | 'zone-third'
+  | 'zone-half'
+  | 'zone-flat'
+  | 'zone-hook'
+  | 'zone-middle'
+  | 'man'
+  | 'blitz-a'
+  | 'blitz-b'
+  | 'blitz-edge'
+  | 'spy'
+  | 'contain'
 
 export interface Player {
   id: string
@@ -51,6 +62,8 @@ export interface Stroke {
   points: Point[]
   curves: (Point | null)[]
   preset: PresetId | null
+  /** Offensive player a defender is covering, for man. */
+  coverId?: string | null
 }
 
 export interface Play {
@@ -61,6 +74,8 @@ export interface Play {
   format: FormatId
   /** Yards from the goal line being attacked. 50 is midfield. */
   los: number
+  /** Pass play, Run play, Defense, and the other buckets in the play list. */
+  category?: string
   notes: string
   /** Which side of the ball your team is on. */
   ourSide: Side

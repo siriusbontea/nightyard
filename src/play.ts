@@ -1,10 +1,11 @@
+import { categoryOf } from './categories'
 import { DEFAULT_LOS, HASH_INSET } from './fieldMarks'
 import { OUR_COLOR, THEIR_COLOR, defenseFor, formationById, offenseFor, playerFromSpot, routeColorAt, shapeFor, type Spot } from './formations'
-import { FIELD_WIDTH, pointOnStroke } from './geometry'
+import { FIELD_WIDTH, insideDir, pointOnStroke } from './geometry'
 import { canRedo, canUndo, commit, createHistory, redo, undo, type History } from './history'
 import { uid } from './id'
 import { playerAtTime } from './playback'
-import { kindForPreset, kindLabel, makeStroke, presetFromPlayer, presetLabel } from './presets'
+import { isDirectionalPreset, kindForPreset, kindLabel, makeStroke, presetFromPlayer, presetLabel } from './presets'
 import type { FormatId, Play, Player, Point, PresetId, Side, Stroke, StrokeKind } from './types'
 import { FORMATS, isFormatId, ourSideOf } from './types'
 
@@ -30,6 +31,7 @@ export function createPlay(options: {
     formationId: formation.id,
     format: options.format,
     los: DEFAULT_LOS,
+    category: 'Pass play',
     notes: '',
     ourSide: 'offense',
     showDefense: false,
@@ -187,6 +189,7 @@ export function duplicatePlay(play: Play): Play {
     ...stroke,
     id: uid(),
     playerId: idMap.get(stroke.playerId) ?? stroke.playerId,
+    coverId: stroke.coverId ? (idMap.get(stroke.coverId) ?? stroke.coverId) : stroke.coverId,
     points: stroke.points.map((point) => ({ ...point })),
     curves: stroke.curves.map((curve) => (curve ? { ...curve } : null)),
   }))
@@ -241,6 +244,25 @@ export function setStroke(play: Play, stroke: Stroke): Play {
   return { ...play, strokes: [...strokes, stroke] }
 }
 
+/** The line this player is running. Motion before the snap is separate. */
+export function mainStroke(play: Play, playerId: string): Stroke | undefined {
+  return play.strokes.find((stroke) => stroke.playerId === playerId && stroke.kind !== 'motion')
+}
+
+/** A new route, run, or block replaces the old one. It does not sit on top. Motion stays. */
+export function replaceMainStroke(play: Play, stroke: Stroke): Play {
+  if (stroke.kind === 'motion') return setStroke(play, stroke)
+  const strokes = play.strokes.filter((item) => !(item.playerId === stroke.playerId && item.kind !== 'motion'))
+  return { ...play, strokes: [...strokes, stroke] }
+}
+
+export function removeRoute(play: Play, playerId: string): Play {
+  const theirs = play.strokes.filter((stroke) => stroke.playerId === playerId)
+  const main = theirs.some((stroke) => stroke.kind !== 'motion')
+  if (main) return { ...play, strokes: play.strokes.filter((stroke) => !(stroke.playerId === playerId && stroke.kind !== 'motion')) }
+  return clearPlayerStrokes(play, playerId)
+}
+
 export function replaceStroke(play: Play, stroke: Stroke): Play {
   return { ...play, strokes: play.strokes.map((item) => (item.id === stroke.id ? stroke : item)) }
 }
@@ -267,10 +289,123 @@ export function presetOnPlayer(play: Play, playerId: string): PresetId | null {
   return (main ?? strokes[0])?.preset ?? null
 }
 
-export function applyPreset(play: Play, playerId: string, preset: PresetId): Play {
+/** Offense faces upfield. Left is the left side of the screen. */
+export type BreakSide = 'left' | 'right'
+
+/** Inside breaks go toward midfield. A player in the middle breaks right. */
+export function defaultBreakSide(x: number): BreakSide {
+  return insideDir(x) === 1 ? 'right' : 'left'
+}
+
+/** +1 sends an inside break toward the right side of the screen. */
+export function insideSign(side: BreakSide): -1 | 1 {
+  return side === 'right' ? 1 : -1
+}
+
+/** Which way this line already breaks. Straight routes have no side. */
+export function routeBreakSide(stroke: Stroke): BreakSide | null {
+  if (stroke.preset && !isDirectionalPreset(stroke.preset)) return null
+  const start = stroke.points[0]
+  if (!start) return null
+  const drifted = stroke.points.find((point) => Math.abs(point.x - start.x) > 0.35)
+  if (!drifted) return null
+  return drifted.x < start.x - 0.05 ? 'left' : 'right'
+}
+
+export function ballXOf(play: Play): number {
+  const center = play.players.find((player) => player.role === 'center')
+  const qb = play.players.find((player) => player.role === 'qb')
+  return center?.x ?? qb?.x ?? FIELD_WIDTH / 2
+}
+
+export function applyPreset(play: Play, playerId: string, preset: PresetId, side?: BreakSide): Play {
+  const player = play.players.find((item) => item.id === playerId)
+  if (!player || preset === 'man') return play
+  const ball = ballXOf(play)
+  const sign = side ? insideSign(side) : player.side === 'defense' ? insideSign(player.x <= ball ? 'left' : 'right') : insideDir(player.x)
+  const stroke = makeStroke(uid(), playerId, preset, presetFromPlayer(preset, player, presetOrigin(play, playerId, preset), sign, ball))
+  return replaceMainStroke(play, stroke)
+}
+
+/** Dashed man line from a defender to the offensive player they cover. */
+export function applyMan(play: Play, playerId: string, targetId: string): Play {
+  const player = play.players.find((item) => item.id === playerId)
+  const target = play.players.find((item) => item.id === targetId)
+  if (!player || !target || target.side === player.side) return play
+  const stroke: Stroke = {
+    id: uid(),
+    playerId,
+    kind: 'route',
+    points: [
+      { x: player.x, y: player.y },
+      { x: target.x, y: target.y },
+    ],
+    curves: [null],
+    preset: 'man',
+    coverId: targetId,
+  }
+  return replaceMainStroke(play, stroke)
+}
+
+function presetForDefender(player: Player, ball: number): PresetId {
+  if (player.role === 'dl') return Math.abs(player.x - ball) > 6 ? 'blitz-edge' : player.x <= ball ? 'blitz-a' : 'blitz-b'
+  if (player.role === 'db') {
+    if (Math.abs(player.x - ball) > 14) return 'zone-third'
+    if (Math.abs(player.x - ball) < 5) return 'zone-middle'
+    return 'zone-half'
+  }
+  return 'zone-hook'
+}
+
+/** Zones for the coverage and a rush for the defensive line. One look, not offensive routes. */
+export function defaultDefenseStrokes(play: Play): Stroke[] {
+  const ball = ballXOf(play)
+  const strokes: Stroke[] = []
+  for (const player of play.players) {
+    if (player.side !== 'defense') continue
+    if (play.strokes.some((stroke) => stroke.playerId === player.id)) continue
+    const side: BreakSide = player.x <= ball ? 'left' : 'right'
+    const preset = presetForDefender(player, ball)
+    strokes.push(makeStroke(uid(), player.id, preset, presetFromPlayer(preset, player, undefined, insideSign(side), ball)))
+  }
+  return strokes
+}
+
+function mirrorPoint(point: Point, axis: number): Point {
+  return { x: axis * 2 - point.x, y: point.y }
+}
+
+/** Flip one player's lines across their own spot, so a slant the other way. */
+export function mirrorPlayerRoutes(play: Play, playerId: string): Play {
   const player = play.players.find((item) => item.id === playerId)
   if (!player) return play
-  return setStroke(play, makeStroke(uid(), playerId, preset, presetFromPlayer(preset, player, presetOrigin(play, playerId, preset))))
+  return {
+    ...play,
+    strokes: play.strokes.map((stroke) =>
+      stroke.playerId !== playerId
+        ? stroke
+        : {
+            ...stroke,
+            points: stroke.points.map((point) => mirrorPoint(point, player.x)),
+            curves: stroke.curves.map((curve) => (curve ? mirrorPoint(curve, player.x) : null)),
+          },
+    ),
+  }
+}
+
+/** Mirror the whole formation and every route, left to right. */
+export function flipPlay(play: Play): Play {
+  const flipX = (x: number) => FIELD_WIDTH - x
+  const flip = (point: Point): Point => ({ x: flipX(point.x), y: point.y })
+  return {
+    ...play,
+    players: play.players.map((player) => ({ ...player, x: flipX(player.x) })),
+    strokes: play.strokes.map((stroke) => ({
+      ...stroke,
+      points: stroke.points.map(flip),
+      curves: stroke.curves.map((curve) => (curve ? flip(curve) : null)),
+    })),
+  }
 }
 
 export function isPlayerShown(play: Play, player: Player): boolean {
@@ -293,13 +428,19 @@ export function applyFormation(play: Play, format: FormatId, formationId: string
     formationId: template.id,
     ourSide,
     players,
-    strokes: [],
+    strokes: ourSide === 'defense' ? defaultDefenseStrokes({ ...play, players, strokes: [] }) : [],
   }
 }
 
 export function setOurSide(play: Play, ourSide: Side): Play {
   if (ourSideOf(play) === ourSide) return { ...play, ourSide }
-  return applyFormation({ ...play, ourSide, showDefense: true }, play.format, play.formationId)
+  const formed = applyFormation({ ...play, ourSide, showDefense: true }, play.format, play.formationId)
+  const lined =
+    ourSide === 'offense' && formed.showDefense ? { ...formed, strokes: defaultDefenseStrokes(formed) } : formed
+  const category = categoryOf(play)
+  if (ourSide === 'defense' && category === 'Pass play') return { ...lined, category: 'Defense' }
+  if (ourSide === 'offense' && category === 'Defense') return { ...lined, category: 'Pass play' }
+  return { ...lined, category }
 }
 
 export function setShowDefense(play: Play, show: boolean): Play {
@@ -310,7 +451,10 @@ export function setShowDefense(play: Play, show: boolean): Play {
     other === 'defense'
       ? defenseFor(play.format, false, 6)
       : offenseFor(play.format, play.formationId, false, 0)
-  return { ...play, showDefense: true, players: [...play.players, ...extra] }
+  const next = { ...play, showDefense: true, players: [...play.players, ...extra] }
+  if (other !== 'defense') return next
+  const added = new Set(extra.map((player) => player.id))
+  return { ...next, strokes: [...play.strokes, ...defaultDefenseStrokes(next).filter((stroke) => added.has(stroke.playerId))] }
 }
 
 export function describeAssignment(player: Player, strokes: Stroke[]): string {
@@ -424,6 +568,7 @@ export function sanitizePlay(input: unknown): Play | null {
         points: points as Point[],
         curves: curves.slice(0, stroke.points.length - 1),
         preset: typeof stroke.preset === 'string' ? (stroke.preset as PresetId) : null,
+        ...(typeof stroke.coverId === 'string' && ids.has(stroke.coverId) ? { coverId: stroke.coverId } : {}),
       })
     }
   }
@@ -437,6 +582,7 @@ export function sanitizePlay(input: unknown): Play | null {
     formationId,
     format,
     los: typeof raw.los === 'number' ? Math.min(50, Math.max(1, Math.round(raw.los))) : DEFAULT_LOS,
+    category: categoryOf({ category: typeof raw.category === 'string' ? raw.category : null, ourSide }),
     notes: typeof raw.notes === 'string' ? raw.notes.slice(0, 600) : '',
     ourSide,
     showDefense: Boolean(raw.showDefense),

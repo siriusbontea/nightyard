@@ -1,18 +1,38 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { DEFAULT_LOS } from '../fieldMarks'
 import { cameraForBox } from '../geometry'
-import { applyPreset, clearPlayerStrokes, deleteStroke, serializePlay, serializePlaybook, slug, updatePlayer } from '../play'
+import {
+  applyMan,
+  applyPreset,
+  ballLabel,
+  ballXOf,
+  clearPlayerStrokes,
+  defaultBreakSide,
+  deleteStroke,
+  flipPlay,
+  mainStroke,
+  mirrorPlayerRoutes,
+  removeRoute,
+  routeBreakSide,
+  serializePlay,
+  serializePlaybook,
+  slug,
+  updatePlayer,
+  type BreakSide,
+} from '../play'
+import { isDefensePreset, isDirectionalPreset } from '../presets'
 import { renderPng } from '../pngExport'
 import { downloadBlob, downloadText } from '../download'
-import { ballLabel } from '../play'
 import { usePlaybook } from '../usePlaybook'
-import type { StrokeKind } from '../types'
+import type { PlayCategory } from '../categories'
+import type { PresetId, StrokeKind } from '../types'
 import { formatShort } from '../types'
 import { Field } from './Field'
 import { PlaybookList } from './PlaybookList'
+import { PlaysSheet } from './PlaysSheet'
 import { dismissWelcome, saveNeedsAccount, shouldShowWelcome, welcomeDismissed } from '../guest'
 import { AccountSheet } from './AccountSheet'
-import { ExportSheet, MoreSheet, PlayerSheet, PlaySettings, PresetSheet, Sheet } from './Sheets'
+import { ExportSheet, MoreSheet, PlayerSheet, PlaySettings, PresetSheet } from './Sheets'
 import { SavedPlaysSheet } from './SavedPlaysSheet'
 import { GuestSavePrompt, WelcomeCard } from './WelcomeCard'
 
@@ -56,6 +76,9 @@ function openingCamera(los = DEFAULT_LOS) {
 export function App() {
   const book = usePlaybook()
   const [tool, setTool] = useState<Tool>('move')
+  const [redrawPlayerId, setRedrawPlayerId] = useState<string | null>(null)
+  const [breakSide, setBreakSide] = useState<BreakSide>('right')
+  const [breakFor, setBreakFor] = useState<string | null>(null)
   const [strokeKind, setStrokeKind] = useState<StrokeKind>('route')
   const [sheet, setSheet] = useState<SheetId>(null)
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null)
@@ -160,11 +183,82 @@ export function App() {
     setWelcomeOn(false)
   }, [book.accountName])
 
+  function chooseTool(next: Tool) {
+    setTool(next)
+    setRedrawPlayerId(null)
+  }
+
   function guestBlocked(action: 'save-play' | 'save-all' | 'new-play' | 'sync') {
     if (!saveNeedsAccount(book.guest, action)) return false
     setSheet(null)
     setSavePrompt(true)
     return true
+  }
+
+  useEffect(() => {
+    setBreakFor(null)
+  }, [play?.id])
+
+  useEffect(() => {
+    if (!play || !selectedPlayerId || breakFor === selectedPlayerId) return
+    const player = play.players.find((item) => item.id === selectedPlayerId)
+    if (!player) return
+    const fromLine = mainStroke(play, selectedPlayerId)
+    const end = fromLine?.points.at(-1)
+    const seen =
+      fromLine?.preset && isDefensePreset(fromLine.preset)
+        ? isDirectionalPreset(fromLine.preset) && end
+          ? end.x <= ballXOf(play)
+            ? 'left'
+            : 'right'
+          : null
+        : fromLine
+          ? routeBreakSide(fromLine)
+          : null
+    const side = seen ?? (player.side === 'defense' ? (player.x <= ballXOf(play) ? 'left' : 'right') : defaultBreakSide(player.x))
+    setBreakSide(side)
+    setBreakFor(selectedPlayerId)
+  }, [play, selectedPlayerId, breakFor])
+
+  function assign(playerId: string, preset: PresetId, side: BreakSide = breakSide) {
+    if (!play) return
+    stopPlayback()
+    const next = applyPreset(play, playerId, preset, side)
+    setSelectedPlayerId(playerId)
+    setSelectedStrokeId(mainStroke(next, playerId)?.id ?? null)
+    setBreakFor(playerId)
+    book.update(next)
+  }
+
+  function applyBreak(side: BreakSide) {
+    if (side === breakSide) return
+    setBreakSide(side)
+    const playerId = selectedPlayerId
+    if (!play || !playerId) return
+    setBreakFor(playerId)
+    const main = mainStroke(play, playerId)
+    if (!main) return
+    stopPlayback()
+    if (main.preset && isDirectionalPreset(main.preset)) {
+      const next = applyPreset(play, playerId, main.preset, side)
+      setSelectedStrokeId(mainStroke(next, playerId)?.id ?? null)
+      book.update(next)
+      return
+    }
+    if (!main.preset) {
+      const next = mirrorPlayerRoutes(play, playerId)
+      setSelectedStrokeId(mainStroke(next, playerId)?.id ?? null)
+      book.update(next)
+    }
+  }
+
+  function cover(playerId: string, targetId: string) {
+    if (!play) return
+    stopPlayback()
+    const next = applyMan(play, playerId, targetId)
+    setSelectedPlayerId(playerId)
+    setSelectedStrokeId(mainStroke(next, playerId)?.id ?? null)
+    book.update(next)
   }
 
   function startNew() {
@@ -302,7 +396,6 @@ export function App() {
           onDuplicate={book.duplicate}
           onDelete={book.remove}
           onCreate={() => startNew()}
-          onImport={() => setSavedOpen(true)}
           saveStatus={book.syncStatus}
           saveKind={book.saveKind}
           onSaveStatus={
@@ -376,6 +469,8 @@ export function App() {
                   setSheet('player')
                 }}
                 onStopPlayback={stopPlayback}
+                redrawPlayerId={redrawPlayerId}
+                onRedrawDone={() => setRedrawPlayerId(null)}
               />
             </div>
           </div>
@@ -405,6 +500,7 @@ export function App() {
             {SPEED_WORD[speed]}
           </button>
         </div>
+        {redrawPlayerId ? <p class="hint">Drag from this player. The new path replaces the old one.</p> : null}
         {tool === 'draw' ? (
           <div class="coach">
             <p class="hint">Drag from a player.</p>
@@ -415,6 +511,45 @@ export function App() {
                 </button>
               ))}
             </div>
+          </div>
+        ) : selected && play.strokes.some((stroke) => stroke.playerId === selected.id) ? (
+          <div class="route-options">
+            <button type="button" class="chip" onClick={() => { setRedrawPlayerId(null); setSheet('presets') }}>
+              Change route
+            </button>
+            {selected.side === 'defense' ? null : (
+              <button type="button" class="chip" onClick={() => assign(selected.id, 'block')}>
+                Block
+              </button>
+            )}
+            <button
+              type="button"
+              class="chip"
+              onClick={() => {
+                setSelectedPlayerId(selected.id)
+                setRedrawPlayerId(selected.id)
+                setSheet(null)
+              }}
+            >
+              Redraw
+            </button>
+            <button
+              type="button"
+              class="chip"
+              onClick={() => {
+                stopPlayback()
+                book.update(removeRoute(play, selected.id))
+                setSelectedStrokeId(null)
+              }}
+            >
+              Remove route
+            </button>
+            <button type="button" class="chip" onClick={() => applyBreak(breakSide === 'left' ? 'right' : 'left')}>
+              Flip
+            </button>
+            <button type="button" class="text-btn" onClick={() => setSheet('player')}>
+              Edit
+            </button>
           </div>
         ) : selected ? (
           <div class="edit-row">
@@ -442,59 +577,72 @@ export function App() {
           <p class="hint">Tap a player to change them.</p>
         )}
         <nav class="toolbar" aria-label="Tools">
-          <button type="button" class="tool" onClick={() => setSheet('book')}>
+          <button type="button" class="tool" onClick={() => { setRedrawPlayerId(null); setSheet('book') }}>
             <BookIcon />
             Plays
           </button>
-          <button type="button" class="tool" aria-pressed={tool === 'move'} onClick={() => setTool('move')}>
+          <button type="button" class="tool" aria-pressed={tool === 'move'} onClick={() => chooseTool('move')}>
             <MoveIcon />
             Move
           </button>
-          <button type="button" class="tool" aria-pressed={tool === 'draw'} onClick={() => setTool('draw')}>
+          <button type="button" class="tool" aria-pressed={tool === 'draw'} onClick={() => chooseTool('draw')}>
             <DrawIcon />
             Draw
           </button>
-          <button type="button" class="tool" onClick={() => setSheet('presets')}>
+          <button type="button" class="tool" onClick={() => { setRedrawPlayerId(null); setSheet('presets') }}>
             <RouteIcon />
             Paths
           </button>
-          <button type="button" class="tool" onClick={() => setSheet('more')}>
+          <button type="button" class="tool" onClick={() => { setRedrawPlayerId(null); setSheet('more') }}>
             <MoreIcon />
             More
           </button>
         </nav>
       </div>
       {sheet === 'book' ? (
-        <Sheet title={book.bookName} onClose={() => setSheet(null)}>
-          <PlaybookList
-            plays={book.plays}
-            currentId={play.id}
-            onOpen={(id) => {
-              book.open(id)
-              setSelectedPlayerId(null)
-              setSelectedStrokeId(null)
-              stopPlayback()
-              setSheet(null)
-            }}
-            onRename={book.rename}
-            onDuplicate={(id) => {
-              book.duplicate(id)
-              setSheet(null)
-            }}
-            onDelete={book.remove}
-            onCreate={() => startNew()}
-            onImport={() => setSavedOpen(true)}
-            saveStatus={book.syncStatus}
-            saveKind={book.saveKind}
-            onSaveStatus={
-              book.saveKind === 'guest'
-                ? () => openAccount('up')
-                : book.saveKind === 'local' || book.saveKind === 'none'
-                  ? undefined
-                  : () => book.notify(SAVE_EXPLAINER)
-            }
-          />
-        </Sheet>
+        <PlaysSheet
+          plays={book.plays}
+          current={play}
+          signedIn={Boolean(book.accountName)}
+          saveStatus={book.syncStatus}
+          saveKind={book.saveKind}
+          onSaveStatus={
+            book.saveKind === 'guest'
+              ? () => openAccount('up')
+              : book.saveKind === 'local' || book.saveKind === 'none'
+                ? undefined
+                : () => book.notify(SAVE_EXPLAINER)
+          }
+          onCreate={() => startNew()}
+          onOpen={(next) => {
+            if (book.plays.some((item) => item.id === next.id)) book.open(next.id)
+            else void book.openSaved(next)
+            setSelectedPlayerId(null)
+            setSelectedStrokeId(null)
+            stopPlayback()
+            setSheet(null)
+          }}
+          onRename={book.rename}
+          onDuplicate={(id) => {
+            book.duplicate(id)
+            setSheet(null)
+          }}
+          onDelete={book.remove}
+          onCategory={(category: PlayCategory) => book.update({ ...play, category })}
+          onDownloadPlay={() => {
+            if (guestBlocked('save-play')) return
+            downloadText(`${slug(play.name)}.json`, serializePlay(play))
+            book.notify('Play file saved')
+          }}
+          onDownloadAll={() => {
+            if (guestBlocked('save-all')) return
+            downloadText(`${slug(book.bookName)}.json`, serializePlaybook(book.bookName, book.plays))
+            book.notify('All plays saved')
+          }}
+          onLoadFile={() => fileRef.current?.click()}
+          onSignIn={() => openAccount('in')}
+          onClose={() => setSheet(null)}
+        />
       ) : null}
       {sheet === 'play' ? (
         <PlaySettings
@@ -514,19 +662,26 @@ export function App() {
         <PresetSheet
           play={play}
           selectedId={selectedPlayerId}
+          breakSide={breakSide}
           onSelect={(id) => {
             setSelectedPlayerId(id)
             const stroke = play.strokes.find((item) => item.playerId === id && item.kind !== 'motion') ?? play.strokes.find((item) => item.playerId === id)
             setSelectedStrokeId(stroke?.id ?? null)
           }}
-          onApply={(playerId, preset) => {
-            stopPlayback()
-            const next = applyPreset(play, playerId, preset)
-            const stroke = next.strokes.find((item) => item.playerId === playerId && item.preset === preset)
+          onBreakSide={applyBreak}
+          onApply={(playerId, preset) => assign(playerId, preset)}
+          onMan={cover}
+          onRedraw={(playerId) => {
             setSelectedPlayerId(playerId)
-            setSelectedStrokeId(stroke?.id ?? null)
-            book.update(next)
+            setRedrawPlayerId(playerId)
+            setSheet(null)
           }}
+          onRemove={(playerId) => {
+            stopPlayback()
+            book.update(removeRoute(play, playerId))
+            setSelectedStrokeId(null)
+          }}
+          onFlip={() => applyBreak(breakSide === 'left' ? 'right' : 'left')}
           onClose={() => setSheet(null)}
         />
       ) : null}
@@ -563,6 +718,11 @@ export function App() {
             stopPlayback()
             setSheet(null)
           }}
+          onFlip={() => {
+            stopPlayback()
+            book.update(flipPlay(play))
+            setSheet(null)
+          }}
           onClose={() => setSheet(null)}
         />
       ) : null}
@@ -574,16 +734,6 @@ export function App() {
           onToggleNotes={() => setIncludeNotes((value) => !value)}
           onToggleAssignments={() => setIncludeAssignments((value) => !value)}
           onPng={exportPng}
-          onJsonPlay={() => {
-            if (guestBlocked('save-play')) return
-            downloadText(`${slug(play.name)}.json`, serializePlay(play))
-            book.notify('Play file saved')
-          }}
-          onJsonBook={() => {
-            if (guestBlocked('save-all')) return
-            downloadText(`${slug(book.bookName)}.json`, serializePlaybook(book.bookName, book.plays))
-            book.notify('All plays saved')
-          }}
           onClose={() => setSheet(null)}
         />
       ) : null}

@@ -1,5 +1,6 @@
 import { EXPORT_CAMERA, viewSize } from './geometry'
 import { fieldMarkup } from './fieldMarkup'
+import { categoryOf } from './categories'
 import { assignmentRows, ballLabel } from './play'
 import { COLOR_FIELD, PRINT, type Theme } from './theme'
 import type { Play } from './types'
@@ -77,7 +78,7 @@ export function renderExportSvg(play: Play, style: ExportStyle, options: ExportO
     )
   }
   y += 28
-  const subtitle = `${play.formation} · ${formatLabel(play.format)} · Ball on ${ballLabel(play.los)}`
+  const subtitle = `${categoryOf(play)} · ${play.formation} · ${formatLabel(play.format)} · Ball on ${ballLabel(play.los)}`
   parts.push(
     `<text x="${margin}" y="${y}" fill="${theme.muted}" font-family="DM Sans, sans-serif" font-size="20">${escapeText(subtitle)}</text>`,
   )

@@ -1,19 +1,27 @@
 import { ballMarkup } from '../ball'
 import { fieldToSvg, segmentTangent, type Camera } from '../geometry'
-import { presetOrigin } from '../play'
-import { kindForPreset, presetFromPlayer } from '../presets'
+import { ballXOf, presetOrigin } from '../play'
+import { kindForPreset, presetFromPlayer, zoneRadius } from '../presets'
 import { NIGHT } from '../theme'
 import type { Play, Player, Point, PresetId } from '../types'
+import type { BreakSide } from '../play'
 
 const AHEAD = 18
-const BEHIND = 3
+const BEHIND = 8
 const HALF = 14
 const SCALE = 4
 const CAMERA: Camera = { ahead: AHEAD, behind: BEHIND, scale: SCALE }
 
 /** Tiny field for one path. Upfield is up, same as the real field. */
-export function PathPreview(props: { play: Play; player: Player; preset: PresetId }) {
-  const path = presetFromPlayer(props.preset, props.player, presetOrigin(props.play, props.player.id, props.preset))
+export function PathPreview(props: { play: Play; player: Player; preset: PresetId; side?: BreakSide }) {
+  const inside = props.side === 'left' ? -1 : props.side === 'right' ? 1 : undefined
+  const path = presetFromPlayer(
+    props.preset,
+    props.player,
+    presetOrigin(props.play, props.player.id, props.preset),
+    inside,
+    ballXOf(props.play),
+  )
   const origin = path.points[0]
   const shift = (point: Point): Point => ({ x: point.x - origin.x + HALF, y: point.y - origin.y })
   const points = path.points.map(shift)
@@ -21,6 +29,8 @@ export function PathPreview(props: { play: Play; player: Player; preset: PresetI
   const width = HALF * 2 * SCALE
   const height = (AHEAD + BEHIND) * SCALE
   const kind = kindForPreset(props.preset)
+  const zone = zoneRadius(props.preset)
+  const man = props.preset === 'man'
   const color = props.player.routeColor
   const outline = NIGHT.routeOutline
   let d = ''
@@ -49,9 +59,15 @@ export function PathPreview(props: { play: Play; player: Player; preset: PresetI
     <svg class="path-preview" viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
       <rect width={width} height={height} fill={NIGHT.turf[0]} />
       <line x1="0" y1={losY} x2={width} y2={losY} stroke={NIGHT.los} stroke-width="2" />
-      <path d={d} fill="none" stroke={outline} stroke-width="5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray={dash} />
-      <path d={d} fill="none" stroke={color} stroke-width="3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray={dash} />
-      {kind === 'block' ? <BlockCap tip={end} dir={dir} color={color} outline={outline} /> : <Arrow tip={end} dir={dir} color={color} outline={outline} />}
+      <path d={d} fill="none" stroke={outline} stroke-width="5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray={man ? '5 3.4' : dash} />
+      <path d={d} fill="none" stroke={color} stroke-width="3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray={man ? '5 3.4' : dash} />
+      {zone ? (
+        <ellipse cx={end.x} cy={end.y} rx={zone.rx * SCALE * 0.72} ry={zone.ry * SCALE * 0.72} fill={color} fill-opacity="0.25" stroke={color} stroke-width="2" />
+      ) : man ? null : kind === 'block' || props.preset === 'contain' ? (
+        <BlockCap tip={end} dir={dir} color={color} outline={outline} />
+      ) : (
+        <Arrow tip={end} dir={dir} color={color} outline={outline} />
+      )}
       <circle cx={playerAt.x} cy={playerAt.y} r="4.5" fill={props.player.color} stroke="#07140e" stroke-width="1.4" />
       <g dangerouslySetInnerHTML={{ __html: ballMarkup(ballAt.x, ballAt.y, 8, NIGHT.ballFill, NIGHT.ballStroke) }} />
     </svg>
