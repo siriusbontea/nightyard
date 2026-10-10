@@ -550,7 +550,7 @@ export function App() {
               {...tip('Your account')}
               onClick={() => openAccount('in')}
             >
-              {accountInitial(book.accountName) || <PersonIcon />}
+              {accountInitial(book.accountName) ? <span class="avatar-letter">{accountInitial(book.accountName)}</span> : <PersonIcon />}
             </button>
           </div>
           <p class="sub">
