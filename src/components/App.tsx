@@ -15,7 +15,7 @@ import {
   removeRoute,
   routeBreakSide,
   serializePlay,
-  serializePlaybook,
+  serializePlaybookFile,
   slug,
   updatePlayer,
   type BreakSide,
@@ -32,6 +32,7 @@ import type { Play, PresetId, StrokeKind } from '../types'
 import { formatShort } from '../types'
 import { Field } from './Field'
 import { PlaybookList } from './PlaybookList'
+import { PlaybookSwitcher } from './PlaybookSwitcher'
 import { PlaysSheet } from './PlaysSheet'
 import { PlaybookSheet } from './PlaybookSheet'
 import { dismissWelcome, saveNeedsAccount, shouldShowWelcome, welcomeDismissed } from '../guest'
@@ -207,7 +208,7 @@ export function App() {
     setRedrawPlayerId(null)
   }
 
-  function guestBlocked(action: 'save-play' | 'save-all' | 'new-play' | 'sync') {
+  function guestBlocked(action: 'save-play' | 'save-all' | 'new-play' | 'new-book' | 'sync') {
     if (!saveNeedsAccount(book.guest, action)) return false
     setSheet(null)
     setPromptDetail(null)
@@ -279,6 +280,16 @@ export function App() {
     setSelectedPlayerId(playerId)
     setSelectedStrokeId(mainStroke(next, playerId)?.id ?? null)
     book.update(next)
+  }
+
+  function addBook() {
+    if (guestBlocked('new-book')) return
+    void book.createBook()
+  }
+
+  function copyThisBook(id: string) {
+    if (guestBlocked('new-book')) return
+    void book.copyBook(id)
   }
 
   function startNew() {
@@ -368,6 +379,16 @@ export function App() {
     return (
       <div class="boot">
         <p class="brand">Night Yard</p>
+        <PlaybookSwitcher
+          books={book.books}
+          currentId={book.currentBookId}
+          countIn={book.countInBook}
+          onSwitch={book.switchBook}
+          onCreate={addBook}
+          onRename={(id, name) => void book.renameBook(id, name)}
+          onCopy={copyThisBook}
+          onDelete={(id) => void book.deleteBook(id)}
+        />
         <h1>No plays yet</h1>
         <p class="empty-copy">Tap the button. Then pick how many players.</p>
         <button type="button" class="primary" onClick={() => startNew()}>
@@ -433,7 +454,13 @@ export function App() {
           onChange={(event) => {
             const file = (event.currentTarget as HTMLInputElement).files?.[0]
             if (!file) return
-            file.text().then((text) => book.importJson(text)).catch(() => book.notify('Could not read that file.'))
+            file
+              .text()
+              .then(async (text) => {
+                const result = await book.importJson(text)
+                if (result === 'account') guestBlocked('new-book')
+              })
+              .catch(() => book.notify('Could not read that file.'))
             ;(event.currentTarget as HTMLInputElement).value = ''
           }}
         />
@@ -448,22 +475,25 @@ export function App() {
       <aside class="desk-book">
         <div class="desk-head">
           <p class="brand">Night Yard</p>
-          <label class="field-label book-name">
-            <span class="book-name-label">
-              <PencilIcon />
-              Playbook name
-            </span>
-            <input
-              value={book.bookName}
-              maxLength={60}
-              aria-label="Playbook name"
-              data-tip="Name your playbook"
-              onInput={(event) => book.renameBook((event.currentTarget as HTMLInputElement).value)}
-            />
-          </label>
+          <PlaybookSwitcher
+            books={book.books}
+            currentId={book.currentBookId}
+            countIn={book.countInBook}
+            onSwitch={(id) => {
+              book.switchBook(id)
+              setSelectedPlayerId(null)
+              setSelectedStrokeId(null)
+              stopPlayback()
+            }}
+            onCreate={addBook}
+            onRename={(id, name) => void book.renameBook(id, name)}
+            onCopy={copyThisBook}
+            onDelete={(id) => void book.deleteBook(id)}
+          />
         </div>
         <PlaybookList
           plays={book.plays}
+          books={book.books}
           currentId={play.id}
           onOpen={(id) => {
             book.open(id)
@@ -474,6 +504,14 @@ export function App() {
           onRename={book.rename}
           onDuplicate={book.duplicate}
           onDelete={book.remove}
+          onCopyTo={(id, bookId) => void book.copyPlayTo(id, bookId)}
+          onMoveTo={(id, bookId) => {
+            void book.movePlayTo(id, bookId)
+            setSelectedPlayerId(null)
+            setSelectedStrokeId(null)
+            stopPlayback()
+          }}
+          onCreateBook={addBook}
           onCreate={() => startNew()}
           saveStatus={book.syncStatus}
           saveKind={book.saveKind}
@@ -697,6 +735,10 @@ export function App() {
       {sheet === 'book' ? (
         <PlaysSheet
           plays={book.plays}
+          books={book.books}
+          currentBookId={book.currentBookId}
+          onlyBook={book.books.length <= 1}
+          countIn={book.countInBook}
           current={play}
           signedIn={Boolean(book.accountName)}
           saveStatus={book.syncStatus}
@@ -723,6 +765,17 @@ export function App() {
             setSheet(null)
           }}
           onDelete={book.remove}
+          onCopyTo={(id, bookId) => void book.copyPlayTo(id, bookId)}
+          onMoveTo={(id, bookId) => void book.movePlayTo(id, bookId)}
+          onSwitchBook={(id) => {
+            book.switchBook(id)
+            setSelectedPlayerId(null)
+            setSelectedStrokeId(null)
+          }}
+          onCreateBook={addBook}
+          onRenameBook={(id, name) => void book.renameBook(id, name)}
+          onCopyBook={copyThisBook}
+          onDeleteBook={(id) => void book.deleteBook(id)}
           onCategory={(category: PlayCategory) => book.update({ ...play, category })}
           onDownloadPlay={() => {
             if (guestBlocked('save-play')) return
@@ -731,8 +784,15 @@ export function App() {
           }}
           onDownloadAll={() => {
             if (guestBlocked('save-all')) return
-            downloadText(`${slug(book.bookName)}.json`, serializePlaybook(book.bookName, book.plays))
-            book.notify('All plays saved')
+            const current = book.books.find((item) => item.id === book.currentBookId)
+            downloadText(
+              `${slug(book.bookName)}.json`,
+              serializePlaybookFile(
+                { id: current?.id ?? book.currentBookId, name: book.bookName, updatedAt: current?.updatedAt ?? Date.now(), data: current?.data },
+                book.plays,
+              ),
+            )
+            book.notify('Playbook file saved')
           }}
           onLoadFile={() => fileRef.current?.click()}
           onSignIn={() => openAccount('in')}
@@ -908,7 +968,10 @@ export function App() {
           if (!file) return
           file
             .text()
-            .then((text) => book.importJson(text))
+            .then(async (text) => {
+              const result = await book.importJson(text)
+              if (result === 'account') guestBlocked('new-book')
+            })
             .catch((error) => book.notify(error instanceof Error ? error.message : 'Could not import that file.'))
           ;(event.currentTarget as HTMLInputElement).value = ''
         }}
@@ -923,15 +986,6 @@ export function App() {
 function accountInitial(name: string | null): string {
   const letter = name?.trim().charAt(0) ?? ''
   return /[a-z0-9]/i.test(letter) ? letter.toUpperCase() : ''
-}
-
-function PencilIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-      <path d="M4 16.5V20h3.5L18 9.5 14.5 6 4 16.5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
-      <path d="M13 7.5l3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.8" />
-    </svg>
-  )
 }
 
 function PersonIcon() {

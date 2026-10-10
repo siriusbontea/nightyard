@@ -85,8 +85,24 @@ export interface Play {
   strokes: Stroke[]
   createdAt: number
   updatedAt: number
+  /** Which playbook this play belongs to. Missing on plays saved before playbooks. */
+  bookId?: string
   /** How this play looked when it was created, or when it was last saved before this app remembered a start. Reset uses it. */
   origin?: Play
+}
+
+/** Settings stored with a playbook. The name and time live beside this. */
+export interface PlaybookData {
+  defaultFormat?: FormatId
+  /** True for the book created to hold plays that had no book yet. */
+  migrated?: boolean
+}
+
+export interface Playbook {
+  id: string
+  name: string
+  updatedAt: number
+  data: PlaybookData
 }
 
 export const FORMATS: { id: FormatId; label: string; offense: number }[] = [

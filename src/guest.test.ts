@@ -42,7 +42,7 @@ describe('guest welcome', () => {
   })
 
   it('asks for an account only when a guest tries to save or sync', () => {
-    for (const action of ['save-play', 'save-all', 'new-play', 'sync'] as const) {
+    for (const action of ['save-play', 'save-all', 'new-play', 'new-book', 'sync'] as const) {
       expect(saveNeedsAccount(true, action)).toBe(true)
       expect(saveNeedsAccount(false, action)).toBe(false)
     }

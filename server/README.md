@@ -14,7 +14,19 @@ Migration: `pb_migrations/1760000000_night_yard_accounts.js`.
 - Password length is at least 8.
 - Username is 3–30 characters: a letter or number, then letters, numbers, `.`, `_`, or `-`. It is unique.
 - A person can create an account. After that they can only read and update their own user. They cannot delete it through the API.
-- `playbook_name` (text, optional, up to 60 characters) is the name shown on the desktop Plays list. `playbook_named_at` (number, unix milliseconds) says which copy is newer. The phone uploads a newer name and takes the account name when the account copy is newer.
+- `playbook_name` (text, optional, up to 60 characters) and `playbook_named_at` (number, unix milliseconds) still mirror the first playbook's name for older phones. Newer phones store each name on a `playbooks` row.
+
+`playbooks` (migration `1760000002_playbooks.js`):
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `owner` | relation → `users` | Required. Deletes with the user. |
+| `book_id` | text | The playbook id from the phone. Unique together with `owner`. |
+| `name` | text | Up to 60 characters. |
+| `data` | json | Settings such as the default format, plus `updatedAt`. |
+| `deleted` | bool | Tombstone. The row stays so other phones drop the playbook. |
+
+List, view, update, and delete require `owner = @request.auth.id`. Create requires `@request.auth.id != "" && owner = @request.auth.id`.
 
 `plays`:
 
@@ -22,6 +34,7 @@ Migration: `pb_migrations/1760000000_night_yard_accounts.js`.
 | --- | --- | --- |
 | `owner` | relation → `users` | Required. One user. Deletes with the user. |
 | `play_id` | text | The play id from the phone. Unique together with `owner`. |
+| `book_id` | text | Which playbook this play belongs to. Optional so older rows stay. |
 | `data` | json | The whole play, including `updatedAt`. |
 | `deleted` | bool | Tombstone. The row stays so other phones learn the play is gone. |
 

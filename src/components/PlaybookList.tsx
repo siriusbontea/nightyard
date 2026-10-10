@@ -3,6 +3,7 @@ import { PLAY_CATEGORIES, groupPlays, type PlayCategory } from '../categories'
 import { filterDeskPlays, neighborId, readCollapsed, toggleCollapsed, visiblePlayIds, writeCollapsed } from '../deskList'
 import type { Play } from '../types'
 import { formatShort } from '../types'
+import { PlayChoiceMenu } from './PlaybookSwitcher'
 
 function age(timestamp: number): string {
   const seconds = Math.round((Date.now() - timestamp) / 1000)
@@ -19,9 +20,13 @@ export function PlaybookList(props: {
   plays: Play[]
   currentId: string | null
   onOpen: (id: string) => void
+  books: { id: string; name: string }[]
   onRename: (id: string, name: string) => void
   onDuplicate: (id: string) => void
   onDelete: (id: string) => void
+  onCopyTo: (id: string, bookId: string) => void
+  onMoveTo: (id: string, bookId: string) => void
+  onCreateBook: () => void
   onCreate: () => void
   onImport?: () => void
   saveStatus?: string
@@ -33,7 +38,7 @@ export function PlaybookList(props: {
   const [filter, setFilter] = useState<PlayCategory | 'All'>('All')
   const [query, setQuery] = useState('')
   const [collapsed, setCollapsed] = useState<string[]>(() => readCollapsed())
-  const [menu, setMenu] = useState<{ id: string; top: number; left: number } | null>(null)
+  const [menu, setMenu] = useState<{ id: string; top: number; left: number; mode: 'root' | 'copy' | 'move' } | null>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const shown = filterDeskPlays(props.plays, query)
@@ -83,11 +88,11 @@ export function PlaybookList(props: {
 
   function openMenu(playId: string, button: HTMLButtonElement) {
     const rect = button.getBoundingClientRect()
-    const width = 168
+    const width = 248
     const left = Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8))
-    const menuHeight = 148
+    const menuHeight = 280
     const top = rect.bottom + menuHeight > window.innerHeight ? Math.max(8, rect.top - menuHeight - 4) : rect.bottom + 4
-    setMenu({ id: playId, top, left })
+    setMenu({ id: playId, top, left, mode: 'root' })
   }
 
   return (
@@ -211,40 +216,40 @@ export function PlaybookList(props: {
         )}
       </div>
       {menu ? (
-        <div class="row-menu" ref={menuRef} style={{ top: `${menu.top}px`, left: `${menu.left}px` }}>
-          <button
-            type="button"
-            onClick={() => {
+        <div class="row-menu wide" ref={menuRef} style={{ top: `${menu.top}px`, left: `${menu.left}px` }}>
+          <PlayChoiceMenu
+            mode={menu.mode}
+            books={props.books.filter((book) => book.id !== props.plays.find((item) => item.id === menu.id)?.bookId)}
+            onMode={(mode) => setMenu({ ...menu, mode })}
+            onRename={() => {
               const play = props.plays.find((item) => item.id === menu.id)
               setMenu(null)
               if (!play) return
               setRenaming(play.id)
               setDraft(play.name)
             }}
-          >
-            Rename
-          </button>
-          <button
-            type="button"
-            onClick={() => {
+            onDuplicate={() => {
               const id = menu.id
               setMenu(null)
               props.onDuplicate(id)
             }}
-          >
-            Copy
-          </button>
-          <button
-            type="button"
-            class="danger"
-            onClick={() => {
+            onDelete={() => {
               const id = menu.id
               setMenu(null)
               props.onDelete(id)
             }}
-          >
-            Delete
-          </button>
+            onPick={(bookId) => {
+              const id = menu.id
+              const mode = menu.mode
+              setMenu(null)
+              if (mode === 'move') props.onMoveTo(id, bookId)
+              else props.onCopyTo(id, bookId)
+            }}
+            onCreateBook={() => {
+              setMenu(null)
+              props.onCreateBook()
+            }}
+          />
         </div>
       ) : null}
     </div>

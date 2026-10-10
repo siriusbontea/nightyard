@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import { PLAY_CATEGORIES, categoryOf, groupPlays, type PlayCategory } from '../categories'
 import { fetchServerPlays, filterSavedPlays, playThumb, showsSavedSearch } from '../savedPlays'
-import type { Play } from '../types'
+import type { Play, Playbook } from '../types'
 import { formatShort } from '../types'
 import { tip } from '../hints'
+import { PlayChoiceMenu, PlaybookSwitcher } from './PlaybookSwitcher'
 import { Sheet } from './Sheets'
 
 function age(timestamp: number): string {
@@ -19,6 +20,10 @@ function age(timestamp: number): string {
 
 export function PlaysSheet(props: {
   plays: Play[]
+  books: Playbook[]
+  currentBookId: string
+  onlyBook: boolean
+  countIn: (id: string) => number
   current: Play
   signedIn: boolean
   saveStatus: string
@@ -29,6 +34,13 @@ export function PlaysSheet(props: {
   onRename: (id: string, name: string) => void
   onDuplicate: (id: string) => void
   onDelete: (id: string) => void
+  onCopyTo: (id: string, bookId: string) => void
+  onMoveTo: (id: string, bookId: string) => void
+  onSwitchBook: (id: string) => void
+  onCreateBook: () => void
+  onRenameBook: (id: string, name: string) => void
+  onCopyBook: (id: string) => void
+  onDeleteBook: (id: string) => void
   onCategory: (category: PlayCategory) => void
   onDownloadPlay: () => void
   onDownloadAll: () => void
@@ -44,11 +56,26 @@ export function PlaysSheet(props: {
   const [query, setQuery] = useState('')
   const [renaming, setRenaming] = useState(false)
   const [draft, setDraft] = useState(props.current.name)
+  const [dest, setDest] = useState<'copy' | 'move' | null>(null)
+  const [menu, setMenu] = useState<{ id: string; top: number; left: number; mode: 'root' | 'copy' | 'move' } | null>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     setDraft(props.current.name)
     setRenaming(false)
+    setDest(null)
   }, [props.current.id])
+
+  useEffect(() => {
+    if (!menu) return
+    const close = (event: Event) => {
+      const target = event.target
+      if (target instanceof Node && menuRef.current?.contains(target)) return
+      setMenu(null)
+    }
+    document.addEventListener('pointerdown', close)
+    return () => document.removeEventListener('pointerdown', close)
+  }, [menu])
 
   useEffect(() => {
     if (!props.signedIn) {
@@ -74,13 +101,26 @@ export function PlaysSheet(props: {
     }
   }, [props.signedIn])
 
-  const source = server ?? props.plays
+  const matches = (play: Play) => play.bookId === props.currentBookId || (props.onlyBook && !play.bookId)
+  const remote = server ? server.filter(matches) : null
+  const source = remote && (remote.length > 0 || props.plays.length === 0) ? remote : props.plays
   const shown = filterSavedPlays(source, query)
+  const otherBooks = props.books.filter((book) => book.id !== props.currentBookId)
   const groups = groupPlays(shown, filter)
   const search = showsSavedSearch(source.length)
 
   return (
     <Sheet title="Plays" subtitle={props.signedIn ? 'Saved to your account' : undefined} onClose={props.onClose}>
+      <PlaybookSwitcher
+        books={props.books}
+        currentId={props.currentBookId}
+        countIn={props.countIn}
+        onSwitch={props.onSwitchBook}
+        onCreate={props.onCreateBook}
+        onRename={props.onRenameBook}
+        onCopy={props.onCopyBook}
+        onDelete={props.onDeleteBook}
+      />
       <button type="button" class="primary wide" onClick={props.onCreate}>
         New play
       </button>
@@ -136,6 +176,40 @@ export function PlaysSheet(props: {
             Delete
           </button>
         </div>
+        {dest ? (
+          <div class="dest-list">
+            <p class="field-label">{dest === 'copy' ? 'Copy to' : 'Move to'}</p>
+            {otherBooks.map((book) => (
+              <button
+                key={book.id}
+                type="button"
+                class="text-btn"
+                onClick={() => {
+                  if (dest === 'move') props.onMoveTo(props.current.id, book.id)
+                  else props.onCopyTo(props.current.id, book.id)
+                  setDest(null)
+                }}
+              >
+                {book.name}
+              </button>
+            ))}
+            <button type="button" class="text-btn" onClick={props.onCreateBook}>
+              New playbook
+            </button>
+            <button type="button" class="text-btn" onClick={() => setDest(null)}>
+              Back
+            </button>
+          </div>
+        ) : (
+          <div class="row-actions wrap">
+            <button type="button" class="text-btn" data-tip="Copy to another playbook" onClick={() => setDest('copy')}>
+              Copy to another playbook
+            </button>
+            <button type="button" class="text-btn" data-tip="Move to another playbook" onClick={() => setDest('move')}>
+              Move to another playbook
+            </button>
+          </div>
+        )}
         <p class="field-label">Category</p>
         <div class="chips">
           {PLAY_CATEGORIES.map((category) => (
@@ -187,15 +261,33 @@ export function PlaysSheet(props: {
             <p class="group-label">{group.category}</p>
             <div class="saved-list">
               {group.plays.map((play) => (
-                <button key={play.id} type="button" class="saved-row" onClick={() => props.onOpen(play)}>
-                  <span class="saved-thumb" dangerouslySetInnerHTML={{ __html: playThumb(play) }} />
-                  <span class="saved-copy">
-                    <span class="play-name">{play.name}</span>
-                    <span class="play-meta">
-                      {formatShort(play.format)} · {age(play.updatedAt)}
+                <div key={play.id} class="saved-row">
+                  <button type="button" class="saved-open" onClick={() => props.onOpen(play)}>
+                    <span class="saved-thumb" dangerouslySetInnerHTML={{ __html: playThumb(play) }} />
+                    <span class="saved-copy">
+                      <span class="play-name">{play.name}</span>
+                      <span class="play-meta">
+                        {formatShort(play.format)} · {age(play.updatedAt)}
+                      </span>
                     </span>
-                  </span>
-                </button>
+                  </button>
+                  <button
+                    type="button"
+                    class="row-more"
+                    aria-label={`Choices for ${play.name}`}
+                    data-tip="Play choices"
+                    aria-expanded={menu?.id === play.id}
+                    onClick={(event) => {
+                      const rect = (event.currentTarget as HTMLButtonElement).getBoundingClientRect()
+                      const width = 248
+                      const left = Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8))
+                      const top = rect.bottom + 4
+                      setMenu({ id: play.id, top, left, mode: 'root' })
+                    }}
+                  >
+                    ⋯
+                  </button>
+                </div>
               ))}
             </div>
           </div>
@@ -206,14 +298,51 @@ export function PlaysSheet(props: {
         <button type="button" class="primary wide ghost" onClick={props.onDownloadPlay}>
           Download this play (file)
         </button>
-        <button type="button" class="primary wide ghost" onClick={props.onDownloadAll}>
-          Download all plays (file)
+        <button type="button" class="primary wide ghost" data-tip="Download this playbook" onClick={props.onDownloadAll}>
+          Download this playbook (file)
         </button>
-        <button type="button" class="primary wide ghost" onClick={props.onLoadFile}>
-          Load a file from this device
+        <button type="button" class="primary wide ghost" data-tip="Load a playbook file" onClick={props.onLoadFile}>
+          Load a playbook from a file
         </button>
         <p class="fine">Your plays already save to your account. These make a file on this phone.</p>
       </section>
+      {menu ? (
+        <div class="row-menu wide" ref={menuRef} style={{ top: `${menu.top}px`, left: `${menu.left}px` }}>
+          <PlayChoiceMenu
+            mode={menu.mode}
+            books={otherBooks}
+            onMode={(mode) => setMenu({ ...menu, mode })}
+            onRename={() => {
+              const play = source.find((item) => item.id === menu.id)
+              setMenu(null)
+              if (!play) return
+              const name = window.prompt('Rename this play', play.name)
+              if (name && name.trim()) props.onRename(play.id, name)
+            }}
+            onDuplicate={() => {
+              const id = menu.id
+              setMenu(null)
+              props.onDuplicate(id)
+            }}
+            onDelete={() => {
+              const id = menu.id
+              setMenu(null)
+              props.onDelete(id)
+            }}
+            onPick={(bookId) => {
+              const id = menu.id
+              const mode = menu.mode
+              setMenu(null)
+              if (mode === 'move') props.onMoveTo(id, bookId)
+              else props.onCopyTo(id, bookId)
+            }}
+            onCreateBook={() => {
+              setMenu(null)
+              props.onCreateBook()
+            }}
+          />
+        </div>
+      ) : null}
     </Sheet>
   )
 }

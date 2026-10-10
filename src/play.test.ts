@@ -29,6 +29,7 @@ import {
   sanitizePlay,
   serializePlay,
   serializePlaybook,
+  serializePlaybookFile,
   showcasePlay,
   translatePlayer,
 } from './play'
@@ -225,6 +226,11 @@ describe('play model', () => {
     const book = parseBundle(serializePlaybook('Friday', [play]))
     expect(book.kind).toBe('playbook')
     expect(book.name).toBe('Friday')
+    expect(book.createBook).toBe(false)
+    const file = parseBundle(serializePlaybookFile({ id: 'book-1', name: 'Friday', updatedAt: 4 }, [play]))
+    expect(file.createBook).toBe(true)
+    expect(file.name).toBe('Friday')
+    expect(file.bookId).toBe('book-1')
     expect(mergePlays([{ ...play, name: 'Old' }], parsed.plays)[0].name).toBe(play.name)
     expect(() =>
       parseBundle(

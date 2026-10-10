@@ -32,6 +32,7 @@ function asPlay(data: unknown): Play | null {
 export function remoteRow(record: {
   id: string
   play_id?: unknown
+  book_id?: unknown
   deleted?: unknown
   data?: unknown
 }): RemoteRow | null {
@@ -39,6 +40,7 @@ export function remoteRow(record: {
   const play = asPlay(record.data)
   const updatedAt = play?.updatedAt ?? 0
   const deleted = Boolean(record.deleted)
+  if (play && !play.bookId && typeof record.book_id === 'string' && record.book_id) play.bookId = record.book_id
   return {
     recordId: record.id,
     playId: record.play_id,

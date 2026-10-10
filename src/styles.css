@@ -229,6 +229,55 @@ textarea { min-height: 96px; resize: vertical; }
 }
 .save-chip.static { cursor: default; }
 .play-save { margin: 2px 0 6px; }
+.book-switch-wrap { position: relative; margin-top: 12px; }
+.book-switch {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--bg-control);
+  color: var(--text);
+  font-weight: 750;
+  text-align: left;
+}
+.book-switch-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.book-switch-chev { flex: none; color: var(--muted); }
+.book-switch-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  max-height: 320px;
+  overflow: auto;
+  padding: 8px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--bg-sheet);
+}
+.book-switch-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 4px;
+  border-radius: 10px;
+  padding: 2px;
+}
+.book-switch-row.current { background: rgba(249, 104, 45, 0.18); }
+.book-pick {
+  flex: 1 1 100%;
+  min-height: 40px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  padding: 6px 8px;
+  font-weight: 750;
+}
+.book-switch-row .text-btn { min-height: 36px; padding: 0 8px; }
 .book-name { margin-top: 12px; }
 .book-name-label {
   display: flex;
@@ -352,7 +401,31 @@ textarea { min-height: 96px; resize: vertical; }
   font-weight: 700;
 }
 .row-menu button:hover { background: rgba(255, 255, 255, 0.06); }
+.row-menu.wide { width: 248px; }
+.row-menu .menu-label {
+  margin: 4px 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
 .row-menu button.danger { color: var(--danger); }
+.dest-list { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.row-actions.wrap { flex-wrap: wrap; }
+.saved-row { padding-right: 4px; }
+.saved-open {
+  flex: 1;
+  min-width: 0;
+  min-height: 76px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
 .backup-label {
   margin: 6px 0 0;
   font-size: 13px;

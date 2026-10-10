@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { commit, createHistory, redo, undo, canRedo, canUndo, type History } from './history'
 import { isGuest } from './guest'
-import { createPlay, duplicatePlay, parseBundle, renamePlay, resetPlay, sanitizePlay } from './play'
-import { deletePlay, loadPlaybook, savePlay, savePlaybookName } from './storage'
-import { showcasePlay } from './play'
+import { createPlay, duplicatePlay, parseBundle, renamePlay, resetPlay, sanitizePlay, showcasePlay } from './play'
+import { adoptOwnerBook, copyName, emptyPlaybook, movePlay, playsInBook, renamePlaybook } from './playbooks'
+import { deletePlay, deletePlaybookRecord, loadPlaybook, saveCurrentBookId, savePlay, savePlaybookName, savePlaybookRecord } from './storage'
 import {
   bootSync,
   currentUsername,
   forgetDelete,
   getSyncState,
+  rememberBookDelete,
   rememberDelete,
   saveChip,
   scheduleSync,
@@ -16,7 +17,7 @@ import {
   subscribeSync,
   type SyncState,
 } from './sync'
-import type { FormatId, Play } from './types'
+import type { FormatId, Play, Playbook } from './types'
 
 const AUTOSAVE_TIP = 'night-yard-autosave-tip'
 
@@ -59,6 +60,8 @@ function nextName(plays: Play[]): string {
 export function usePlaybook() {
   const [ready, setReady] = useState(false)
   const [plays, setPlays] = useState<Play[]>([])
+  const [books, setBooks] = useState<Playbook[]>([])
+  const [currentId, setCurrentId] = useState('')
   const [bookName, setBookName] = useState('Night Yard')
   const [history, setHistory] = useState<History | null>(null)
   const [toast, setToast] = useState<string | null>(null)
@@ -75,9 +78,15 @@ export function usePlaybook() {
   const guestRef = useRef(false)
   const bookNameRef = useRef(bookName)
   const bookNamedAtRef = useRef(0)
+  const booksRef = useRef(books)
+  const currentIdRef = useRef(currentId)
+  const accountNameRef = useRef('Night Yard')
+  const mirrorIdRef = useRef('')
   const signedRef = useRef(getSyncState().signedIn)
   const tipped = useRef(autosaveTipSeen())
   playsRef.current = plays
+  booksRef.current = books
+  currentIdRef.current = currentId
   historyRef.current = history
   memoryOnlyRef.current = memoryOnly
   guestRef.current = guest
@@ -116,6 +125,16 @@ export function usePlaybook() {
     setPlays(replacePlay(playsRef.current, next.present))
   }
 
+  function visiblePlays(list: Play[], bookId = currentIdRef.current): Play[] {
+    return list.filter((item) => item.bookId === bookId)
+  }
+
+  function openHistory(play: Play | null) {
+    const opened = play ? createHistory(play) : null
+    historyRef.current = opened
+    setHistory(opened)
+  }
+
   function acceptPlays(next: Play[]) {
     const previous = playsRef.current
     if (keepsLocal()) {
@@ -129,17 +148,47 @@ export function usePlaybook() {
     setPlays(next)
     const current = historyRef.current
     if (!current) {
-      const opened = next[0] ? createHistory(next[0]) : null
-      historyRef.current = opened
-      setHistory(opened)
+      openHistory(visiblePlays(next)[0] ?? null)
       return
     }
     const updated = next.find((item) => item.id === current.present.id) ?? null
-    if (updated && (updated === current.present || samePlay(updated, current.present))) return
-    const open = updated ?? next[0] ?? null
-    const opened = open ? createHistory(open) : null
-    historyRef.current = opened
-    setHistory(opened)
+    if (updated && updated.bookId === currentIdRef.current && (updated === current.present || samePlay(updated, current.present))) return
+    const open = updated && updated.bookId === currentIdRef.current ? updated : (visiblePlays(next)[0] ?? null)
+    openHistory(open)
+  }
+
+  function applyBooks(next: Playbook[], wanted: string) {
+    const previous = booksRef.current
+    const id = next.some((book) => book.id === wanted) ? wanted : (next[0]?.id ?? '')
+    booksRef.current = next
+    currentIdRef.current = id
+    setBooks(next)
+    setCurrentId(id)
+    const current = next.find((book) => book.id === id)
+    if (current) setBookName(current.name)
+    if (keepsLocal()) {
+      void (async () => {
+        for (const old of previous) {
+          if (!next.some((book) => book.id === old.id)) await deletePlaybookRecord(old.id)
+        }
+        for (const book of next) await savePlaybookRecord(book)
+        if (id) await saveCurrentBookId(id)
+      })()
+    }
+    const open = historyRef.current
+    if (open && open.present.bookId !== id) openHistory(visiblePlays(playsRef.current, id)[0] ?? null)
+    const ids = new Set(next.map((book) => book.id))
+    if (!id || !playsRef.current.some((play) => !play.bookId || !ids.has(play.bookId))) return
+    const now = Date.now()
+    const fixed = playsRef.current.map((play) =>
+      play.bookId && ids.has(play.bookId) ? play : { ...play, bookId: id, updatedAt: Math.max(play.updatedAt, now) },
+    )
+    const changed = fixed.filter((play, index) => play !== playsRef.current[index])
+    playsRef.current = fixed
+    setPlays(fixed)
+    if (!keepsLocal()) return
+    for (const play of changed) void savePlay(play)
+    if (changed.length > 0) scheduleSync()
   }
 
   useEffect(() => subscribeSync(setAccount), [])
@@ -151,22 +200,62 @@ export function usePlaybook() {
       stop = bootSync({
         getPlays: () => playsRef.current,
         applyPlays: acceptPlays,
-        getBookName: () => ({ name: bookNameRef.current, namedAt: bookNamedAtRef.current }),
+        getBooks: () => booksRef.current,
+        getCurrentBookId: () => currentIdRef.current,
+        applyBooks,
+        adoptOwner: (ownerId) => {
+          const adopted = adoptOwnerBook(booksRef.current, playsRef.current, ownerId)
+          if (!adopted.changed) return
+          const previousId = booksRef.current[0]?.id
+          booksRef.current = adopted.books
+          playsRef.current = adopted.plays
+          setBooks(adopted.books)
+          setPlays(adopted.plays)
+          const nextId = adopted.books[0]?.id ?? ''
+          if (currentIdRef.current === previousId) {
+            currentIdRef.current = nextId
+            setCurrentId(nextId)
+          }
+          if (mirrorIdRef.current === previousId) mirrorIdRef.current = nextId
+          if (!keepsLocal()) return
+          void (async () => {
+            if (previousId) await deletePlaybookRecord(previousId)
+            for (const book of adopted.books) await savePlaybookRecord(book)
+            for (const play of adopted.plays) await savePlay(play)
+            if (currentIdRef.current) await saveCurrentBookId(currentIdRef.current)
+          })()
+        },
+        getBookName: () => ({ name: accountNameRef.current || bookNameRef.current, namedAt: bookNamedAtRef.current }),
         applyBookName: (name, namedAt) => {
           bookNamedAtRef.current = namedAt
-          setBookName(name)
-          if (keepsLocal()) void savePlaybookName(name, true, namedAt)
+          accountNameRef.current = name
+          const id = mirrorIdRef.current || currentIdRef.current
+          const next = booksRef.current.map((book) => (book.id === id && book.name !== name ? renamePlaybook(book, name, Math.max(book.updatedAt, namedAt)) : book))
+          booksRef.current = next
+          setBooks(next)
+          if (currentIdRef.current === id) setBookName(name)
+          if (!keepsLocal()) return
+          void savePlaybookName(name, true, namedAt)
+          const changed = next.find((book) => book.id === id)
+          if (changed) void savePlaybookRecord(changed)
         },
       })
     }
     loadPlaybook()
       .then((loaded) => {
         if (cancel) return
-        const opened = loaded.plays[0] ? createHistory(loaded.plays[0]) : null
+        const first = loaded.plays.find((item) => item.bookId === loaded.currentId) ?? null
+        const opened = first ? createHistory(first) : null
         playsRef.current = loaded.plays
+        booksRef.current = loaded.books
+        currentIdRef.current = loaded.currentId
+        mirrorIdRef.current = loaded.currentId
+        accountNameRef.current = loaded.name
         historyRef.current = opened
         bookNamedAtRef.current = loaded.namedAt
         setBookName(loaded.name)
+        setBooks(loaded.books)
+        setCurrentId(loaded.currentId)
         setPlays(loaded.plays)
         setHistory(opened)
         const nextGuest = isGuest(Boolean(currentUsername()), loaded.legacy)
@@ -179,10 +268,19 @@ export function usePlaybook() {
       .catch(() => {
         if (cancel) return
         const starter = showcasePlay()
+        const book = emptyPlaybook('Night Yard')
+        starter.bookId = book.id
         const opened = createHistory(starter)
         playsRef.current = [starter]
+        booksRef.current = [book]
+        currentIdRef.current = book.id
+        mirrorIdRef.current = book.id
+        accountNameRef.current = book.name
         historyRef.current = opened
         setPlays([starter])
+        setBooks([book])
+        setCurrentId(book.id)
+        setBookName(book.name)
         setHistory(opened)
         memoryOnlyRef.current = true
         setMemoryOnly(true)
@@ -224,7 +322,9 @@ export function usePlaybook() {
     void (async () => {
       try {
         for (const item of plays) await savePlay(item)
-        await savePlaybookName(bookNameRef.current, true, bookNamedAtRef.current)
+        for (const item of booksRef.current) await savePlaybookRecord(item)
+        if (currentIdRef.current) await saveCurrentBookId(currentIdRef.current)
+        await savePlaybookName(accountNameRef.current || bookNameRef.current, true, bookNamedAtRef.current)
         if (cancel) return
         guestRef.current = false
         setGuest(false)
@@ -271,11 +371,14 @@ export function usePlaybook() {
   }
 
   async function create(format: FormatId = '11v11') {
+    const bookId = currentIdRef.current || booksRef.current[0]?.id
+    if (!bookId) return
     const created = createPlay({
       format,
       formationId: format === '11v11' ? 'shotgun-trips' : undefined,
-      name: nextName(playsRef.current),
+      name: nextName(visiblePlays(playsRef.current, bookId)),
     })
+    created.bookId = bookId
     let failed = false
     if (keepsLocal()) {
       await savePlay(created)
@@ -333,10 +436,8 @@ export function usePlaybook() {
     setPlays(remaining)
     if (keepsLocal()) rememberDelete(id)
     if (historyRef.current?.present.id === id) {
-      const fallback = remaining[0] ?? null
-      const next = fallback ? createHistory(fallback) : null
-      historyRef.current = next
-      setHistory(next)
+      const source = found.bookId ?? currentIdRef.current
+      openHistory(remaining.find((item) => item.bookId === source) ?? null)
     }
     notify('Deleted. Tap Undo.', () => {
       void restoreDeleted()
@@ -369,23 +470,194 @@ export function usePlaybook() {
     notify('Brought it back.')
   }
 
-  async function renameBook(name: string) {
-    const trimmed = name.trim() || 'Night Yard'
-    const namedAt = Date.now()
-    bookNamedAtRef.current = namedAt
-    setBookName(trimmed)
+  async function rememberBook(book: Playbook) {
+    const next = booksRef.current.some((item) => item.id === book.id)
+      ? booksRef.current.map((item) => (item.id === book.id ? book : item))
+      : [book, ...booksRef.current]
+    booksRef.current = next
+    setBooks(next)
+    if (book.id === currentIdRef.current) setBookName(book.name)
     if (!keepsLocal()) return
+    await savePlaybookRecord(book)
+    scheduleSync()
+  }
+
+  function useBook(id: string) {
+    const book = booksRef.current.find((item) => item.id === id)
+    if (!book) return
+    currentIdRef.current = id
+    setCurrentId(id)
+    setBookName(book.name)
+    openHistory(visiblePlays(playsRef.current, id)[0] ?? null)
+    if (keepsLocal()) void saveCurrentBookId(id)
+  }
+
+  async function renameBook(id: string, name: string) {
+    const found = booksRef.current.find((item) => item.id === id)
+    if (!found) return
+    const renamed = renamePlaybook(found, name)
     try {
-      await savePlaybookName(trimmed, true, namedAt)
-      scheduleSync()
+      if (id === mirrorIdRef.current || booksRef.current.length === 1) {
+        const namedAt = Date.now()
+        bookNamedAtRef.current = namedAt
+        accountNameRef.current = renamed.name
+        mirrorIdRef.current = id
+        if (keepsLocal()) await savePlaybookName(renamed.name, true, namedAt)
+      }
+      await rememberBook(renamed)
     } catch {
-      setToast('Could not rename the plays.')
+      setToast('Could not rename the playbook.')
     }
+  }
+
+  async function createBook() {
+    if (guestRef.current) return false
+    const book = emptyPlaybook('New playbook')
+    const starter = createPlay({ format: '11v11', formationId: 'shotgun-trips', name: 'New play' })
+    starter.bookId = book.id
+    try {
+      if (keepsLocal()) {
+        await savePlaybookRecord(book)
+        await savePlay(starter)
+        await saveCurrentBookId(book.id)
+      }
+    } catch {
+      setToast('Could not save on this phone.')
+      return false
+    }
+    playsRef.current = [starter, ...playsRef.current]
+    setPlays(playsRef.current)
+    await rememberBook(book)
+    useBook(book.id)
+    maybeAutosaveTip()
+    return true
+  }
+
+  async function copyBook(id: string) {
+    if (guestRef.current) return false
+    const source = booksRef.current.find((item) => item.id === id)
+    if (!source) return false
+    const book = emptyPlaybook(copyName(source.name))
+    const data = { ...source.data }
+    delete data.migrated
+    book.data = data
+    let copies = playsInBook(playsRef.current, id).map((play) => {
+      const copy = duplicatePlay(play)
+      return { ...copy, name: play.name, bookId: book.id }
+    })
+    if (copies.length === 0) {
+      const starter = createPlay({ format: '11v11', formationId: 'shotgun-trips', name: 'New play' })
+      copies = [{ ...starter, bookId: book.id }]
+    }
+    try {
+      if (keepsLocal()) {
+        await savePlaybookRecord(book)
+        for (const play of copies) await savePlay(play)
+        await saveCurrentBookId(book.id)
+      }
+    } catch {
+      setToast('Could not save on this phone.')
+      return false
+    }
+    playsRef.current = [...copies, ...playsRef.current]
+    setPlays(playsRef.current)
+    await rememberBook(book)
+    useBook(book.id)
+    notify('Made a copy')
+    maybeAutosaveTip()
+    return true
+  }
+
+  async function deleteBook(id: string) {
+    if (booksRef.current.length <= 1) {
+      notify('Keep one playbook.')
+      return
+    }
+    const victims = playsInBook(playsRef.current, id)
+    if (keepsLocal()) {
+      try {
+        for (const play of victims) await deletePlay(play.id)
+        await deletePlaybookRecord(id)
+      } catch {
+        notify('Could not delete that playbook.')
+        return
+      }
+    }
+    const now = Date.now()
+    const remainingPlays = playsRef.current.filter((play) => play.bookId !== id)
+    const remainingBooks = booksRef.current.filter((book) => book.id !== id)
+    playsRef.current = remainingPlays
+    booksRef.current = remainingBooks
+    setPlays(remainingPlays)
+    setBooks(remainingBooks)
+    if (mirrorIdRef.current === id) mirrorIdRef.current = remainingBooks[0]?.id ?? ''
+    if (currentIdRef.current === id) {
+      const nextBook = remainingBooks[0]
+      currentIdRef.current = nextBook?.id ?? ''
+      setCurrentId(currentIdRef.current)
+      if (nextBook) setBookName(nextBook.name)
+      openHistory(nextBook ? (remainingPlays.find((play) => play.bookId === nextBook.id) ?? null) : null)
+      if (keepsLocal() && nextBook) await saveCurrentBookId(nextBook.id).catch(() => undefined)
+    } else if (historyRef.current && victims.some((play) => play.id === historyRef.current?.present.id)) {
+      openHistory(visiblePlays(remainingPlays)[0] ?? null)
+    }
+    if (keepsLocal()) {
+      for (const play of victims) rememberDelete(play.id, now)
+      rememberBookDelete(id, now)
+    }
+    notify('Playbook deleted.')
+  }
+
+  async function copyPlayTo(id: string, bookId: string) {
+    const found = playsRef.current.find((item) => item.id === id)
+    const target = booksRef.current.find((item) => item.id === bookId)
+    if (!found || !target || found.bookId === bookId) return
+    const copy = duplicatePlay(found)
+    const placed = { ...copy, name: found.name, bookId }
+    if (keepsLocal()) {
+      try {
+        await savePlay(placed)
+      } catch {
+        notify('Could not save on this phone.')
+        return
+      }
+      scheduleSync()
+    }
+    playsRef.current = [placed, ...playsRef.current]
+    setPlays(playsRef.current)
+    notify(`Copied to ${target.name}`)
+    maybeAutosaveTip()
+  }
+
+  async function movePlayTo(id: string, bookId: string) {
+    const found = playsRef.current.find((item) => item.id === id)
+    const target = booksRef.current.find((item) => item.id === bookId)
+    if (!found || !target || found.bookId === bookId) return
+    const sourceId = found.bookId
+    const moved = movePlay(found, bookId)
+    if (keepsLocal()) {
+      try {
+        await savePlay(moved)
+      } catch {
+        notify('Could not save on this phone.')
+        return
+      }
+      scheduleSync()
+    }
+    const list = replacePlay(playsRef.current, moved)
+    playsRef.current = list
+    setPlays(list)
+    if (historyRef.current?.present.id === id) {
+      openHistory(list.find((play) => play.bookId === sourceId) ?? null)
+    }
+    notify(`Moved to ${target.name}`)
+    maybeAutosaveTip()
   }
 
   async function openSaved(incoming: Play) {
     const play = sanitizePlay(incoming)
     if (!play) return
+    if (!play.bookId) play.bookId = currentIdRef.current || booksRef.current[0]?.id
     if (keepsLocal()) {
       try {
         await savePlay(play)
@@ -405,28 +677,46 @@ export function usePlaybook() {
     notify(`Opened ${play.name}`)
   }
 
-  async function importJson(text: string) {
+  async function importJson(text: string): Promise<'account' | 'ok'> {
     const bundle = parseBundle(text)
-    if (keepsLocal()) {
-      for (const item of bundle.plays) await savePlay(item)
-      if (playsRef.current.length === 0 && bundle.kind === 'playbook') {
-        const namedAt = Date.now()
-        bookNamedAtRef.current = namedAt
-        await savePlaybookName(bundle.name, true, namedAt)
+    if (bundle.createBook) {
+      if (guestRef.current) return 'account'
+      const book = emptyPlaybook(bundle.name)
+      const copies = bundle.plays.map((play) => {
+        const copy = duplicatePlay(play)
+        return { ...copy, name: play.name, bookId: book.id }
+      })
+      if (keepsLocal()) {
+        await savePlaybookRecord(book)
+        for (const play of copies) await savePlay(play)
+        await saveCurrentBookId(book.id)
       }
+      playsRef.current = [...copies, ...playsRef.current]
+      setPlays(playsRef.current)
+      await rememberBook(book)
+      useBook(book.id)
+      notify(`Opened ${book.name}`)
+      maybeAutosaveTip()
+      return 'ok'
+    }
+    const bookId = currentIdRef.current || booksRef.current[0]?.id || ''
+    const stamped = bundle.plays.map((play) => ({ ...play, bookId, updatedAt: Date.now() }))
+    if (keepsLocal()) {
+      for (const item of stamped) await savePlay(item)
     }
     const merged = [...playsRef.current]
-    for (const item of bundle.plays) {
+    for (const item of stamped) {
       const index = merged.findIndex((play) => play.id === item.id)
       if (index >= 0) merged[index] = item
       else merged.unshift(item)
     }
+    playsRef.current = merged
     setPlays(merged)
-    if (bundle.kind === 'playbook' && playsRef.current.length === 0) setBookName(bundle.name)
-    const next = createHistory(bundle.plays[0])
-    historyRef.current = next
-    setHistory(next)
-    notify(bundle.plays.length === 1 ? `Opened ${bundle.plays[0].name}` : `Opened ${bundle.plays.length} plays`)
+    if (bookId) useBook(bookId)
+    else openHistory(stamped[0] ?? null)
+    if (keepsLocal()) scheduleSync()
+    notify(stamped.length === 1 ? `Opened ${stamped[0].name}` : `Opened ${stamped.length} plays`)
+    return 'ok'
   }
 
   function reset() {
@@ -457,9 +747,13 @@ export function usePlaybook() {
     maybeAutosaveTip()
   }
 
+  const shown = currentId ? plays.filter((item) => item.bookId === currentId) : plays
+
   return {
     ready,
-    plays,
+    plays: shown,
+    books,
+    currentBookId: currentId,
     bookName,
     play,
     toast,
@@ -470,6 +764,7 @@ export function usePlaybook() {
     syncStatus: saveChip(saved, account, online, guest).label,
     saveKind: saveChip(saved, account, online, guest).kind,
     notify,
+    countInBook: (id: string) => plays.filter((item) => item.bookId === id).length,
     canUndo: history ? canUndo(history) : false,
     canRedo: history ? canRedo(history) : false,
     update,
@@ -480,6 +775,12 @@ export function usePlaybook() {
     remove,
     reset,
     renameBook,
+    createBook,
+    copyBook,
+    deleteBook,
+    switchBook: useBook,
+    copyPlayTo,
+    movePlayTo,
     importJson,
     openSaved,
     undo: doUndo,

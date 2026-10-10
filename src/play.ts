@@ -591,6 +591,7 @@ export function sanitizePlay(input: unknown): Play | null {
     createdAt: typeof raw.createdAt === 'number' ? raw.createdAt : now,
     updatedAt: typeof raw.updatedAt === 'number' ? raw.updatedAt : now,
   }
+  if (typeof raw.bookId === 'string' && raw.bookId.trim()) play.bookId = raw.bookId.trim().slice(0, 80)
   const stored = raw.origin ? sanitizePlay({ ...raw.origin, origin: undefined }) : null
   play.origin = stored ? withoutOrigin(stored) : withoutOrigin(play)
   return play
@@ -600,11 +601,34 @@ export interface ParsedBundle {
   kind: 'play' | 'playbook'
   name: string
   plays: Play[]
+  /** A version 2 playbook file becomes its own playbook. Older files join the open one. */
+  createBook: boolean
+  bookId?: string
+  updatedAt?: number
 }
 
 export function serializePlaybook(name: string, plays: Play[]): string {
   return JSON.stringify(
     { app: 'night-yard', version: 1, kind: 'playbook', name, exportedAt: new Date().toISOString(), plays },
+    null,
+    2,
+  )
+}
+
+/** Current playbook file. Older apps still read version 1. */
+export function serializePlaybookFile(book: { id: string; name: string; updatedAt: number; data?: unknown }, plays: Play[]): string {
+  return JSON.stringify(
+    {
+      app: 'night-yard',
+      version: 2,
+      kind: 'playbook',
+      name: book.name,
+      bookId: book.id,
+      updatedAt: book.updatedAt,
+      data: book.data ?? {},
+      exportedAt: new Date().toISOString(),
+      plays,
+    },
     null,
     2,
   )
@@ -622,19 +646,36 @@ export function parseBundle(text: string): ParsedBundle {
     throw new Error('That file is not valid JSON.')
   }
   if (!data || typeof data !== 'object') throw new Error('That file is not a Night Yard play.')
-  const bundle = data as { app?: string; version?: number; kind?: string; name?: string; play?: unknown; plays?: unknown }
-  if (bundle.app !== 'night-yard' || bundle.version !== 1) {
+  const bundle = data as {
+    app?: string
+    version?: number
+    kind?: string
+    name?: string
+    play?: unknown
+    plays?: unknown
+    bookId?: unknown
+    updatedAt?: unknown
+  }
+  if (bundle.app !== 'night-yard' || (bundle.version !== 1 && bundle.version !== 2)) {
     throw new Error('That file is not a Night Yard playbook.')
   }
   if (bundle.kind === 'play') {
     const play = sanitizePlay(bundle.play)
     if (!play) throw new Error('That play could not be read.')
-    return { kind: 'play', name: play.name, plays: [play] }
+    return { kind: 'play', name: play.name, plays: [play], createBook: false }
   }
   if (bundle.kind === 'playbook' && Array.isArray(bundle.plays)) {
     const plays = bundle.plays.map(sanitizePlay).filter((play): play is Play => play !== null)
     if (plays.length === 0) throw new Error('That playbook has no readable plays.')
-    return { kind: 'playbook', name: typeof bundle.name === 'string' && bundle.name.trim() ? bundle.name.trim() : 'Night Yard', plays }
+    const name = typeof bundle.name === 'string' && bundle.name.trim() ? bundle.name.trim() : 'My Playbook'
+    return {
+      kind: 'playbook',
+      name,
+      plays,
+      createBook: bundle.version === 2,
+      bookId: typeof bundle.bookId === 'string' ? bundle.bookId : undefined,
+      updatedAt: typeof bundle.updatedAt === 'number' ? bundle.updatedAt : undefined,
+    }
   }
   throw new Error('That file is not a Night Yard playbook.')
 }

@@ -1,7 +1,7 @@
 const WELCOME_KEY = 'night-yard-welcome'
 
 /** Saving features a guest is asked about. Editing the field is not one of them. */
-export type SaveAction = 'save-play' | 'save-all' | 'new-play' | 'sync'
+export type SaveAction = 'save-play' | 'save-all' | 'new-play' | 'new-book' | 'sync'
 
 export function welcomeDismissed(): boolean {
   try {
