@@ -1,4 +1,4 @@
-import type { Side } from './types'
+import type { FormatId, Side } from './types'
 
 export const PLAY_CATEGORIES = [
   'Pass play',
@@ -11,6 +11,12 @@ export const PLAY_CATEGORIES = [
 ] as const
 
 export type PlayCategory = (typeof PLAY_CATEGORIES)[number]
+
+/** Flag has no kicking game, so that bucket stays off the choice list. */
+export function categoriesFor(format: FormatId): PlayCategory[] {
+  if (format === '11v11') return [...PLAY_CATEGORIES]
+  return PLAY_CATEGORIES.filter((category) => category !== 'Special teams')
+}
 
 export function isPlayCategory(value: unknown): value is PlayCategory {
   return typeof value === 'string' && (PLAY_CATEGORIES as readonly string[]).includes(value)

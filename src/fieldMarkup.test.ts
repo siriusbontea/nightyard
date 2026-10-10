@@ -45,7 +45,7 @@ describe('player markers', () => {
       expect(size * Math.max(1, player.label.length) * 0.58, player.label).toBeLessThanOrEqual(widthBudget + 0.6)
     }
     const renamed = createPlay({ format: '5v5', formationId: 'doubles' })
-    const slot = renamed.players.find((player) => player.label === 'Y')!
+    const slot = renamed.players.find((player) => player.label === 'H')!
     slot.label = 'SLT'
     const sized = fieldMarkup({ play: renamed, camera: EXPORT_CAMERA, theme: NIGHT })
     expect(fontSize(labelTag(sized, 'SLT'))).toBeLessThan(fontSize(labelTag(sized, 'X')))

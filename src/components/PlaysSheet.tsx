@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { PLAY_CATEGORIES, categoryOf, groupPlays, type PlayCategory } from '../categories'
+import { PLAY_CATEGORIES, categoriesFor, categoryOf, groupPlays, type PlayCategory } from '../categories'
 import { fetchServerPlays, filterSavedPlays, playThumb, showsSavedSearch } from '../savedPlays'
 import type { Play, Playbook } from '../types'
 import { formatShort } from '../types'
@@ -212,7 +212,7 @@ export function PlaysSheet(props: {
         )}
         <p class="field-label">Category</p>
         <div class="chips">
-          {PLAY_CATEGORIES.map((category) => (
+          {categoriesFor(props.current.format).map((category) => (
             <button
               key={category}
               type="button"

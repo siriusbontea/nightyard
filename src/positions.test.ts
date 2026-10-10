@@ -8,7 +8,24 @@ describe('positions', () => {
     expect(positionsFor('5v5', 'defense').map((option) => option.label)).toEqual(['LB', 'CB', 'S'])
     expect(positionsFor('7v7', 'offense').map((option) => option.label)).toContain('G')
     expect(positionsFor('7v7', 'offense').map((option) => option.label)).not.toContain('TE')
-    expect(positionsFor('11v11', 'offense').map((option) => option.label)).toEqual(['QB', 'RB', 'FB', 'TE', 'WR', 'C', 'G', 'T'])
+    expect(positionsFor('11v11', 'offense').map((option) => option.label)).toEqual([
+      'QB',
+      'RB',
+      'FB',
+      'TE',
+      'WR',
+      'C',
+      'G',
+      'T',
+      'K',
+      'P',
+      'LS',
+      'H',
+      'KR',
+      'PR',
+      'Gun',
+      'Wing',
+    ])
     expect(positionsFor('11v11', 'defense').map((option) => option.label)).toEqual(['LB', 'CB', 'S', 'DE', 'DT', 'DL'])
   })
 

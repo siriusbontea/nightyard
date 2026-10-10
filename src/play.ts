@@ -1,6 +1,6 @@
 import { categoryOf } from './categories'
 import { DEFAULT_LOS, HASH_INSET } from './fieldMarks'
-import { OUR_COLOR, THEIR_COLOR, defenseFor, formationById, offenseFor, playerFromSpot, routeColorAt, shapeFor, type Spot } from './formations'
+import { OUR_COLOR, THEIR_COLOR, defenseFor, formationById, offenseFor, playerFromSpot, routeColorAt, shapeFor, specialDefense, type Spot } from './formations'
 import { FIELD_WIDTH, insideDir, pointOnStroke } from './geometry'
 import { canRedo, canUndo, commit, createHistory, redo, undo, type History } from './history'
 import { uid } from './id'
@@ -24,22 +24,25 @@ export function createPlay(options: {
 }): Play {
   const formation = formationById(options.format, options.formationId ?? formationById(options.format, '').id)
   const now = Date.now()
-  return rememberStart({
+  const players = offenseFor(options.format, formation.id)
+  const play: Play = {
     id: options.id ?? uid(),
     name: options.name ?? 'New play',
     formation: formation.name,
     formationId: formation.id,
     format: options.format,
     los: DEFAULT_LOS,
-    category: 'Pass play',
+    category: formation.special ? 'Special teams' : 'Pass play',
     notes: '',
     ourSide: 'offense',
     showDefense: false,
-    players: offenseFor(options.format, formation.id),
+    players,
     strokes: [],
     createdAt: now,
     updatedAt: now,
-  })
+  }
+  if (formation.special) play.strokes = jobStrokes(players, formation.spots, ballXOf(play))
+  return rememberStart(play)
 }
 
 function withoutOrigin(play: Play): Play {
@@ -95,13 +98,13 @@ export function corndogPlay(name = 'Corndog'): Play {
       { label: 'LG', role: 'ol', x: ball - 3.8, y: 0 },
       { label: 'C', role: 'center', x: ball, y: -0.15 },
       { label: 'RG', role: 'ol', x: ball + 3.6, y: 0 },
-      { label: 'RT', role: 'ol', x: ball + 6.4, y: 0 },
-      { label: 'Y', role: 'te', x: ball + 10.6, y: 0 },
-      { label: 'TE', role: 'te', x: ball + 12.4, y: 0.35 },
-      { label: 'X', role: 'wr', x: ball + 14.6, y: 0 },
+      { label: 'RT', role: 'ol', x: ball + 6.9, y: 0 },
+      { label: 'Y', role: 'te', x: ball + 10.6, y: -1.1 },
+      { label: 'TE', role: 'te', x: ball + 14, y: -1 },
+      { label: 'X', role: 'wr', x: ball + 17.4, y: 0 },
       { label: 'Z', role: 'wr', x: 6.4, y: 0 },
       { label: 'QB', role: 'qb', x: ball, y: -5 },
-      { label: 'RB', role: 'rb', x: ball + 2.6, y: -4.8 },
+      { label: 'RB', role: 'rb', x: ball + 3.5, y: -5.2 },
     ],
     'offense',
     true,
@@ -114,11 +117,11 @@ export function corndogPlay(name = 'Corndog'): Play {
       { label: 'T', role: 'dl', x: ball + 2.2, y: 1.05 },
       { label: 'J', role: 'dl', x: ball + 6.6, y: 1.05 },
       { label: 'W', role: 'lb', x: ball - 10.4, y: 2.5 },
-      { label: 'M', role: 'lb', x: ball, y: 2.6 },
-      { label: '$', role: 'lb', x: ball + 5.4, y: 2.4 },
+      { label: 'M', role: 'lb', x: ball, y: 4.4 },
+      { label: '$', role: 'lb', x: ball + 7.2, y: 4.5 },
       { label: 'LC', role: 'db', x: 6.4, y: 1.7 },
       { label: 'SS', role: 'db', x: ball + 10.6, y: 1.8 },
-      { label: 'FS', role: 'db', x: ball + 4.2, y: 5.6 },
+      { label: 'FS', role: 'db', x: ball + 3.2, y: 6.6 },
       { label: 'RC', role: 'db', x: ball + 14.6, y: 1.75 },
     ],
     'defense',
@@ -167,7 +170,7 @@ export function corndogPlay(name = 'Corndog'): Play {
     ]),
     drawn(back.id, 'run', 'run', [
       { x: back.x, y: back.y },
-      { x: back.x + 2.2, y: -0.7 },
+      { x: back.x + 2.2, y: 0.6 },
     ]),
   ]
   delete play.origin
@@ -351,8 +354,8 @@ function presetForDefender(player: Player, ball: number): PresetId {
   if (player.role === 'dl') return Math.abs(player.x - ball) > 6 ? 'blitz-edge' : player.x <= ball ? 'blitz-a' : 'blitz-b'
   if (player.role === 'db') {
     if (Math.abs(player.x - ball) > 14) return 'zone-third'
-    if (Math.abs(player.x - ball) < 5) return 'zone-middle'
-    return 'zone-half'
+    if (Math.abs(player.x - ball) < 7) return 'zone-middle'
+    return 'zone-hook'
   }
   return 'zone-hook'
 }
@@ -412,31 +415,55 @@ export function isPlayerShown(play: Play, player: Player): boolean {
   return player.side === ourSideOf(play) || play.showDefense
 }
 
+function jobStrokes(players: Player[], spots: Spot[], ball: number): Stroke[] {
+  const strokes: Stroke[] = []
+  players.forEach((player, index) => {
+    const job = spots[index]?.job
+    if (!job) return
+    const sign = player.side === 'defense' ? insideSign(player.x <= ball ? 'left' : 'right') : insideDir(player.x)
+    strokes.push(makeStroke(uid(), player.id, job, presetFromPlayer(job, player, undefined, sign, ball)))
+  })
+  return strokes
+}
+
+function kickingStrokes(play: Play, templateId: string, offense: Player[], defense: Player[], includeOffense: boolean, includeDefense: boolean): Stroke[] {
+  const ball = ballXOf({ ...play, players: [...offense, ...defense] })
+  const ours = formationById(play.format, templateId).spots
+  const theirs = specialDefense(templateId) ?? []
+  return [
+    ...(includeOffense ? jobStrokes(offense, ours, ball) : []),
+    ...(includeDefense ? jobStrokes(defense, theirs, ball) : []),
+  ]
+}
+
 export function applyFormation(play: Play, format: FormatId, formationId: string): Play {
   const template = formationById(format, formationId)
   const ourSide = ourSideOf(play)
   const offense = offenseFor(format, template.id, ourSide === 'offense', 0)
-  const defense = defenseFor(format, ourSide === 'defense', 6)
+  const defense = defenseFor(format, ourSide === 'defense', 6, template.special ? template.id : undefined)
   const players =
     ourSide === 'defense'
       ? [...defense, ...(play.showDefense ? offense : [])]
       : [...offense, ...(play.showDefense ? defense : [])]
-  return {
-    ...play,
-    format,
-    formation: template.name,
-    formationId: template.id,
-    ourSide,
-    players,
-    strokes: ourSide === 'defense' ? defaultDefenseStrokes({ ...play, players, strokes: [] }) : [],
+  const draft = { ...play, format, formation: template.name, formationId: template.id, ourSide, players, strokes: [] as Stroke[] }
+  let strokes: Stroke[] = []
+  if (template.special) {
+    strokes = kickingStrokes(draft, template.id, offense, defense, ourSide === 'offense' || play.showDefense, ourSide === 'defense' || play.showDefense)
+  } else if (ourSide === 'defense') {
+    strokes = defaultDefenseStrokes(draft)
   }
+  let category = categoryOf(play)
+  if (template.special) category = 'Special teams'
+  else if (category === 'Special teams') category = ourSide === 'defense' ? 'Defense' : 'Pass play'
+  return { ...draft, strokes, category }
 }
 
 export function setOurSide(play: Play, ourSide: Side): Play {
   if (ourSideOf(play) === ourSide) return { ...play, ourSide }
   const formed = applyFormation({ ...play, ourSide, showDefense: true }, play.format, play.formationId)
-  const lined =
-    ourSide === 'offense' && formed.showDefense ? { ...formed, strokes: defaultDefenseStrokes(formed) } : formed
+  const special = Boolean(formationById(formed.format, formed.formationId).special)
+  const lined = ourSide === 'offense' && formed.showDefense && !special ? { ...formed, strokes: defaultDefenseStrokes(formed) } : formed
+  if (special) return { ...lined, category: 'Special teams' }
   const category = categoryOf(play)
   if (ourSide === 'defense' && category === 'Pass play') return { ...lined, category: 'Defense' }
   if (ourSide === 'offense' && category === 'Defense') return { ...lined, category: 'Pass play' }
@@ -447,11 +474,17 @@ export function setShowDefense(play: Play, show: boolean): Play {
   if (!show) return { ...play, showDefense: false }
   const other: Side = ourSideOf(play) === 'offense' ? 'defense' : 'offense'
   if (play.players.some((player) => player.side === other)) return { ...play, showDefense: true }
+  const template = formationById(play.format, play.formationId)
   const extra =
     other === 'defense'
-      ? defenseFor(play.format, false, 6)
+      ? defenseFor(play.format, false, 6, template.special ? template.id : undefined)
       : offenseFor(play.format, play.formationId, false, 0)
   const next = { ...play, showDefense: true, players: [...play.players, ...extra] }
+  if (template.special) {
+    const spots = other === 'defense' ? (specialDefense(template.id) ?? []) : template.spots
+    const added = jobStrokes(extra, spots, ballXOf(next))
+    return { ...next, strokes: [...play.strokes, ...added] }
+  }
   if (other !== 'defense') return next
   const added = new Set(extra.map((player) => player.id))
   return { ...next, strokes: [...play.strokes, ...defaultDefenseStrokes(next).filter((stroke) => added.has(stroke.playerId))] }

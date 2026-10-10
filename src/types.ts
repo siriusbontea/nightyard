@@ -38,6 +38,10 @@ export type PresetId =
   | 'blitz-edge'
   | 'spy'
   | 'contain'
+  | 'kick'
+  | 'cover'
+  | 'return'
+  | 'rush-kick'
 
 export interface Player {
   id: string

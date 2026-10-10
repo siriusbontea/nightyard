@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
-import { formationsFor, shapeFor } from '../formations'
+import { formationById, formationsFor, shapeFor } from '../formations'
 import { applyFormation, presetOnPlayer, setOurSide, setShowDefense } from '../play'
 import { applyPosition, positionSelected, positionsFor } from '../positions'
 import { assignmentsFor, plainPreset, presetLabel } from '../presets'
-import { PLAY_CATEGORIES, categoryOf } from '../categories'
+import { categoriesFor, categoryOf } from '../categories'
 import type { BreakSide } from '../play'
 import type { Play, Player, PresetId } from '../types'
 import { FORMATS, formatShort, formatStyle, ourSideOf, type FormatId } from '../types'
@@ -127,21 +127,45 @@ export function PlaySettings(props: { play: Play; onChange: (play: Play) => void
       </div>
       <p class="field-label">{ourSideOf(play) === 'defense' ? 'Their lineup' : 'Lineup'}</p>
       <div class="chips">
-        {formationsFor(play.format).map((template) => (
-          <button
-            key={template.id}
-            type="button"
-            class="chip"
-            aria-pressed={play.formationId === template.id}
-            onClick={() => props.onChange(applyFormation(edited(), play.format, template.id))}
-          >
-            {template.name}
-          </button>
-        ))}
+        {formationsFor(play.format)
+          .filter((template) => !template.special)
+          .map((template) => (
+            <button
+              key={template.id}
+              type="button"
+              class="chip"
+              aria-pressed={play.formationId === template.id}
+              onClick={() => props.onChange(applyFormation(edited(), play.format, template.id))}
+            >
+              {template.name}
+            </button>
+          ))}
       </div>
+      {play.format === '11v11' ? (
+        <>
+          <p class="field-label">Kicking</p>
+          <div class="chips">
+            {formationsFor(play.format)
+              .filter((template) => template.special)
+              .map((template) => (
+                <button
+                  key={template.id}
+                  type="button"
+                  class="chip"
+                  aria-pressed={play.formationId === template.id}
+                  onClick={() => props.onChange(applyFormation(edited(), play.format, template.id))}
+                >
+                  {template.name}
+                </button>
+              ))}
+          </div>
+        </>
+      ) : (
+        <p class="fine">Flag does not use kicking.</p>
+      )}
       <p class="field-label">Kind of play</p>
       <div class="cat-grid">
-        {PLAY_CATEGORIES.map((category) => (
+        {categoriesFor(play.format).map((category) => (
           <button
             key={category}
             type="button"
@@ -199,7 +223,7 @@ export function PresetSheet(props: {
   const [picked, setPicked] = useState<{ playerId: string; preset: PresetId } | null>(null)
   const fromPlay = selected ? presetOnPlayer(props.play, selected.id) : null
   const highlighted = selected && picked?.playerId === selected.id ? picked.preset : fromPlay
-  const jobs = selected ? assignmentsFor(selected) : []
+  const jobs = selected ? assignmentsFor(selected, Boolean(formationById(props.play.format, props.play.formationId).special)) : []
   const targets = selected ? props.play.players.filter((player) => player.side !== selected.side && (player.side === ourSideOf(props.play) || props.play.showDefense)) : []
   const hasLine = selected ? props.play.strokes.some((stroke) => stroke.playerId === selected.id) : false
   return (

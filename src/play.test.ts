@@ -60,8 +60,8 @@ describe('play model', () => {
         const play = createPlay({ format: format.id, formationId: formation.id, name: formation.name })
         const center = play.players.find((player) => player.role === 'center')
         const qb = play.players.find((player) => player.role === 'qb')
-        expect(center?.x, `${format.id} ${formation.id} center`).toBeCloseTo(midfield, 5)
-        expect(qb?.x, `${format.id} ${formation.id} quarterback`).toBeCloseTo(midfield, 5)
+        if (!formation.special || center) expect(center?.x, `${format.id} ${formation.id} center`).toBeCloseTo(midfield, 5)
+        if (!formation.special || qb) expect(qb?.x, `${format.id} ${formation.id} quarterback`).toBeCloseTo(midfield, 5)
         for (const player of play.players) {
           expect(player.x, `${format.id} ${player.label}`).toBeGreaterThanOrEqual(PLAYER_R)
           expect(player.x, `${format.id} ${player.label}`).toBeLessThanOrEqual(FIELD_WIDTH - PLAYER_R)
