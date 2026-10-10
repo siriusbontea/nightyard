@@ -61,6 +61,10 @@ export function PlaySettings(props: { play: Play; onChange: (play: Play) => void
     setNotes(play.notes)
   }, [play.id])
 
+  useEffect(() => {
+    setFormation(play.formation)
+  }, [play.formation])
+
   function edited(): Play {
     return {
       ...play,

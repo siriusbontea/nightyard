@@ -314,7 +314,10 @@ export function usePlaybook() {
 
   useEffect(() => {
     if (!ready || !play || memoryOnly || guest || guestRef.current) return
-    if (savedPlay.current && samePlay(savedPlay.current, play)) return
+    if (savedPlay.current && samePlay(savedPlay.current, play)) {
+      setSaved(true)
+      return
+    }
     if (!savedPlay.current) {
       savedPlay.current = play
       return

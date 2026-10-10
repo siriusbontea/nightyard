@@ -11,6 +11,7 @@
     "build:prod": "tsc --noEmit && BASE_PATH=/nightyard/ vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "icons": "node scripts/icons.mjs"
   },
   "repository": {
@@ -27,6 +28,7 @@
     "preact": "^11.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.0",
     "@preact/preset-vite": "^2.10.6",
     "fake-indexeddb": "^6.2.5",
     "sharp": "^0.35.5",

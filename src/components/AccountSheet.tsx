@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks'
+import { useEffect, useId, useState } from 'preact/hooks'
 import { changePassword, signIn, signOut, signUp } from '../account'
 import { messageFor } from '../accountErrors'
 import { getSyncState, statusLine, subscribeSync } from '../sync'
@@ -154,12 +154,14 @@ function SecretField(props: {
   onInput: (value: string) => void
 }) {
   const [shown, setShown] = useState(false)
+  const id = useId()
   return (
-    <label class="field-label">
-      {props.label}
+    <div class="field-label">
+      <label for={id}>{props.label}</label>
       <span class="secret">
         {shown ? (
           <input
+            id={id}
             type="text"
             value={props.value}
             autocomplete={props.autoComplete}
@@ -167,6 +169,7 @@ function SecretField(props: {
           />
         ) : (
           <input
+            id={id}
             type="password"
             value={props.value}
             autocomplete={props.autoComplete}
@@ -183,6 +186,6 @@ function SecretField(props: {
           {shown ? 'Hide' : 'Show'}
         </button>
       </span>
-    </label>
+    </div>
   )
 }

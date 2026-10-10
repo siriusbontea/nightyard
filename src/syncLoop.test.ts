@@ -108,6 +108,7 @@ describe('sync steady state', () => {
   afterEach(() => {
     resetSyncForTests()
     vi.useRealTimers()
+    vi.unstubAllGlobals()
   })
 
   it('makes zero requests over 10 seconds once the account matches this phone', async () => {
@@ -144,6 +145,47 @@ describe('sync steady state', () => {
     expect(h.calls.length).toBe(settled)
     expect(getSyncState().phase).toBe('synced')
     expect(h.calls.filter((call) => call.startsWith('PATCH'))).toEqual([])
+    stop()
+  })
+
+  it('does not pull while offline, then pulls once the phone is back', async () => {
+    vi.useFakeTimers()
+    memory()
+    h.calls.length = 0
+    const nav = { onLine: false }
+    vi.stubGlobal('navigator', nav)
+    const plays: Play[] = [h.play as Play]
+    const books: Playbook[] = [h.book]
+    const stop = bootSync({
+      getPlays: () => plays,
+      applyPlays: () => {
+        scheduleSync()
+      },
+      getBooks: () => books,
+      getCurrentBookId: () => books[0].id,
+      applyBooks: () => {
+        scheduleSync()
+      },
+      adoptOwner: () => {},
+      getBookName: () => ({ name: 'Night Yard', namedAt: 10 }),
+      applyBookName: () => {
+        scheduleSync()
+      },
+    })
+
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(h.calls.filter((call) => call.startsWith('GET plays'))).toEqual([])
+    expect(h.calls.filter((call) => call.startsWith('PATCH'))).toEqual([])
+    expect(getSyncState().phase).toBe('pending')
+
+    nav.onLine = true
+    scheduleSync()
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(h.calls.filter((call) => call.startsWith('GET plays')).length).toBeGreaterThan(0)
+    expect(getSyncState().phase).toBe('synced')
+    const settled = h.calls.length
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(h.calls.length).toBe(settled)
     stop()
   })
 })

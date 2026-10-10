@@ -379,6 +379,7 @@ export function App() {
 
   const selected = play?.players.find((player) => player.id === selectedPlayerId) ?? null
   const showWelcome = welcomeOn && !book.accountName
+  const showWelcomeCard = showWelcome && sheet !== 'account' && !savePrompt
 
   if (!book.ready) {
     return (
@@ -434,7 +435,7 @@ export function App() {
             onClose={() => setSavePrompt(false)}
           />
         ) : null}
-        {showWelcome ? (
+        {showWelcomeCard ? (
           <WelcomeCard onCreate={() => openAccount('up')} onTry={tryFirst} onSignIn={() => openAccount('in')} />
         ) : null}
         {savedOpen ? (
@@ -946,7 +947,7 @@ export function App() {
           onClose={() => setSavePrompt(false)}
         />
       ) : null}
-      {showWelcome ? (
+      {showWelcomeCard ? (
         <WelcomeCard onCreate={() => openAccount('up')} onTry={tryFirst} onSignIn={() => openAccount('in')} />
       ) : null}
       {savedOpen ? (

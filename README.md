@@ -17,7 +17,10 @@ A free account is optional. The first visit shows a welcome card once on that de
 
 ```bash
 npm test
+npm run test:e2e
 ```
+
+`npm test` is the unit suite. `npm run test:e2e` runs Playwright against the dev server and a local PocketBase on port 8090. The dev server can already be running; Playwright reuses it.
 
 ## Build
 
