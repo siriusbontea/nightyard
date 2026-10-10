@@ -1,6 +1,6 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFImage, type PDFPage } from 'pdf-lib'
 import { categoryOf, isPlayCategory, type PlayCategory } from './categories'
-import { COLOR_ART, END_ZONE_COLOR, END_ZONE_LINE, LINE_ART, artContentCenter, type OpaqueBox } from './endZoneArt'
+import { END_ZONE_COLOR, END_ZONE_LINE, LINE_ART, artContentCenter, type OpaqueBox } from './endZoneArt'
 import { fieldMarkup } from './fieldMarkup'
 import { viewSize } from './geometry'
 import { layoutQuickPages, noteRows, playbookTitle, wrapToWidth } from './playbookLayout'
@@ -13,8 +13,73 @@ import { formatLabel } from './types'
 export const LETTER_W = 612
 export const LETTER_H = 792
 
-export function logoAsset(style: ExportStyle): string {
-  return style === 'print' ? END_ZONE_LINE : END_ZONE_COLOR
+/** White covers keep the line-art dog. Color covers use the original file, loaded on demand. */
+export function logoAsset(style: ExportStyle): string | null {
+  return style === 'print' ? END_ZONE_LINE : null
+}
+
+export function coverMode(style: ExportStyle): 'original' | 'line' {
+  return style === 'print' ? 'line' : 'original'
+}
+
+/** Six inches on a letter page. The file is about 200 pixels per inch at this size. */
+export const COVER_ART_WIDTH = 6 * 72
+
+/** Matches the compressed edge of the original art so the square disappears. */
+export const COVER_BG = '#191919'
+
+export function originalCoverLayout(pixelW: number, pixelH: number): {
+  x: number
+  y: number
+  width: number
+  height: number
+  titleY: number
+  dateY: number
+} {
+  let width = COVER_ART_WIDTH
+  let height = width * (pixelH / Math.max(pixelW, 1))
+  const titleY = 156
+  const dateY = 122
+  const y = titleY + 56
+  const maxTop = LETTER_H - 28
+  if (y + height > maxTop) {
+    height = maxTop - y
+    width = height * (pixelW / Math.max(pixelH, 1))
+  }
+  return { x: (LETTER_W - width) / 2, y, width, height, titleY, dateY }
+}
+
+/** Vitest serves asset imports as root paths. Node fetch cannot load those, so tests read the file. */
+async function fetchBytes(url: string): Promise<Uint8Array> {
+  if (import.meta.env.MODE === 'test' && !/^https?:/i.test(url)) {
+    const fsName = 'node:fs/promises'
+    const urlName = 'node:url'
+    const fs = (await import(/* @vite-ignore */ fsName)) as {
+      readFile: (path: string) => Promise<Uint8Array>
+    }
+    const urlMod = (await import(/* @vite-ignore */ urlName)) as {
+      fileURLToPath: (input: string | URL) => string
+    }
+    const file = url.startsWith('file:')
+      ? urlMod.fileURLToPath(url)
+      : urlMod.fileURLToPath(new URL(url.startsWith('/') ? `..${url}` : url, import.meta.url))
+    return new Uint8Array(await fs.readFile(file))
+  }
+  const response = await fetch(url)
+  if (!response.ok) throw new Error('Could not load the team logo.')
+  return new Uint8Array(await response.arrayBuffer())
+}
+
+/** The original jpeg is a separate file. It is fetched only while a color PDF is built. */
+export async function loadCoverArt(style: ExportStyle): Promise<{
+  bytes: Uint8Array
+  kind: 'jpeg' | 'png'
+  mode: 'original' | 'line'
+}> {
+  const mode = coverMode(style)
+  if (mode === 'line') return { bytes: await fetchBytes(END_ZONE_LINE), kind: 'png', mode }
+  const mod = await import('./assets/cover-dawgs.jpg')
+  return { bytes: await fetchBytes(mod.default), kind: 'jpeg', mode }
 }
 
 export function coverDate(date: Date): string {
@@ -73,7 +138,10 @@ export async function buildPlaybookPdf(input: {
   name: string
   dateLabel: string
   style: ExportStyle
-  logoPng: Uint8Array
+  logoPng?: Uint8Array
+  logoBytes?: Uint8Array
+  logoKind?: 'jpeg' | 'png'
+  coverMode?: 'original' | 'line'
   art: OpaqueBox
   pages: Uint8Array[]
 }): Promise<Uint8Array> {
@@ -84,16 +152,16 @@ export async function buildPlaybookPdf(input: {
   doc.setSubject(dateLabel)
   const font = await doc.embedFont(StandardFonts.Helvetica)
   const bold = await doc.embedFont(StandardFonts.HelveticaBold)
-  const theme = input.style === 'print' ? PRINT : COLOR_FIELD
-  const logo = await doc.embedPng(input.logoPng)
-  const place = coverPlacement(input.art)
-  const cover = doc.addPage([LETTER_W, LETTER_H])
-  cover.drawRectangle({ x: 0, y: 0, width: LETTER_W, height: LETTER_H, color: fill(theme.page) })
-  cover.drawImage(logo, { x: place.x, y: place.y, width: place.width, height: place.height })
-  let titleSize = 36
-  while (titleSize > 18 && bold.widthOfTextAtSize(title, titleSize) > 480) titleSize -= 2
-  drawCentered(cover, title, place.titleY, titleSize, bold, fill(theme.title))
-  drawCentered(cover, pdfSafe(input.dateLabel, ''), place.dateY, 16, font, fill(theme.muted))
+  await paintCover(doc, {
+    title,
+    dateLabel,
+    style: input.style,
+    logoBytes: input.logoBytes ?? input.logoPng ?? new Uint8Array(),
+    logoKind: input.logoKind ?? 'png',
+    coverMode: input.coverMode ?? coverMode(input.style),
+    art: input.art,
+    pageNumber: 1,
+  }, font, bold)
 
   for (const bytes of input.pages) {
     const page = doc.addPage([LETTER_W, LETTER_H])
@@ -103,34 +171,7 @@ export async function buildPlaybookPdf(input: {
   return doc.save()
 }
 
-async function rasterPng(url: string): Promise<Uint8Array> {
-  const response = await fetch(url)
-  if (!response.ok) throw new Error('Could not load the team logo.')
-  const bytes = new Uint8Array(await response.arrayBuffer())
-  if (url.endsWith('.png')) return bytes
-  const objectUrl = URL.createObjectURL(new Blob([bytes], { type: 'image/webp' }))
-  try {
-    const image = new Image()
-    await new Promise<void>((resolve, reject) => {
-      image.onload = () => resolve()
-      image.onerror = () => reject(new Error('Could not read the team logo.'))
-      image.src = objectUrl
-    })
-    const canvas = document.createElement('canvas')
-    canvas.width = image.naturalWidth
-    canvas.height = image.naturalHeight
-    const context = canvas.getContext('2d')
-    if (!context) throw new Error('Canvas is unavailable in this browser.')
-    context.drawImage(image, 0, 0)
-    const png = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
-    if (!png) throw new Error('Could not prepare the team logo.')
-    return new Uint8Array(await png.arrayBuffer())
-  } finally {
-    URL.revokeObjectURL(objectUrl)
-  }
-}
-
-/** Letter playbook. The cover uses the color dog or the black line-art dog. */
+/** Letter playbook. Color covers use the original art. White covers keep the line dog. */
 export async function renderPlaybookPdf(input: {
   name: string
   plays: Play[]
@@ -139,7 +180,7 @@ export async function renderPlaybookPdf(input: {
   includeNotes: boolean
   includeAssignments: boolean
 }): Promise<Uint8Array> {
-  const logoPng = await rasterPng(logoAsset(input.style))
+  const cover = await loadCoverArt(input.style)
   const pages: Uint8Array[] = []
   for (const play of input.plays) {
     const blob = await renderPng(play, input.style, {
@@ -152,8 +193,10 @@ export async function renderPlaybookPdf(input: {
     name: input.name,
     dateLabel: coverDate(input.date),
     style: input.style,
-    logoPng,
-    art: input.style === 'print' ? LINE_ART : COLOR_ART,
+    logoBytes: cover.bytes,
+    logoKind: cover.kind,
+    coverMode: cover.mode,
+    art: LINE_ART,
     pages,
   })
 }
@@ -217,7 +260,9 @@ export async function buildPlaybookDocument(input: {
   title: string
   dateLabel: string
   style: ExportStyle
-  logoPng: Uint8Array
+  logoBytes: Uint8Array
+  logoKind: 'jpeg' | 'png'
+  coverMode: 'original' | 'line'
   art: OpaqueBox
   plays: PlaybookPagePlay[]
 }): Promise<Uint8Array> {
@@ -232,7 +277,6 @@ export async function buildPlaybookDocument(input: {
   const ink = fill(theme.title)
   const muted = fill(theme.muted)
   const paper = fill(theme.page)
-  const logo = await doc.embedPng(input.logoPng)
   const diagrams = new Map<number, PDFImage>()
   for (const play of input.plays) diagrams.set(play.number, await doc.embedPng(play.diagram))
 
@@ -245,16 +289,21 @@ export async function buildPlaybookDocument(input: {
     })),
   )
   let pageNumber = 1
-
-  const place = coverPlacement(input.art)
-  const cover = doc.addPage([LETTER_W, LETTER_H])
-  cover.drawRectangle({ x: 0, y: 0, width: LETTER_W, height: LETTER_H, color: paper })
-  cover.drawImage(logo, { x: place.x, y: place.y, width: place.width, height: place.height })
-  let titleSize = 36
-  while (titleSize > 18 && bold.widthOfTextAtSize(title, titleSize) > 480) titleSize -= 2
-  drawCentered(cover, title, place.titleY, titleSize, bold, ink)
-  drawCentered(cover, dateLabel, place.dateY, 16, font, muted)
-  footer(cover, font, pageNumber, muted)
+  await paintCover(
+    doc,
+    {
+      title,
+      dateLabel,
+      style: input.style,
+      logoBytes: input.logoBytes,
+      logoKind: input.logoKind,
+      coverMode: input.coverMode,
+      art: input.art,
+      pageNumber,
+    },
+    font,
+    bold,
+  )
   pageNumber += 1
 
   const tileW = (LETTER_W - MARGIN * 2 - TILE_GAP * 2) / 3
@@ -381,7 +430,7 @@ export async function renderPlaybookFile(input: {
   style: ExportStyle
   date: Date
 }): Promise<Uint8Array> {
-  const logoPng = await rasterPng(logoAsset(input.style))
+  const cover = await loadCoverArt(input.style)
   const plays: PlaybookPagePlay[] = []
   for (let index = 0; index < input.plays.length; index += 1) {
     const play = input.plays[index]
@@ -399,8 +448,43 @@ export async function renderPlaybookFile(input: {
     title: input.title,
     dateLabel: coverDate(input.date),
     style: input.style,
-    logoPng,
-    art: input.style === 'print' ? LINE_ART : COLOR_ART,
+    logoBytes: cover.bytes,
+    logoKind: cover.kind,
+    coverMode: cover.mode,
+    art: LINE_ART,
     plays,
   })
+}
+
+async function paintCover(
+  doc: PDFDocument,
+  input: {
+    title: string
+    dateLabel: string
+    style: ExportStyle
+    logoBytes: Uint8Array
+    logoKind: 'jpeg' | 'png'
+    coverMode: 'original' | 'line'
+    art: OpaqueBox
+    pageNumber: number
+  },
+  font: PDFFont,
+  bold: PDFFont,
+) {
+  const original = input.coverMode === 'original'
+  const theme = input.style === 'print' ? PRINT : COLOR_FIELD
+  const paper = fill(original ? COVER_BG : theme.page)
+  const titleColor = fill(original ? '#FFFFFF' : theme.title)
+  const dateColor = fill(original ? '#F9682D' : theme.muted)
+  const foot = fill(original ? '#B5B5B5' : theme.muted)
+  const logo = input.logoKind === 'jpeg' ? await doc.embedJpg(input.logoBytes) : await doc.embedPng(input.logoBytes)
+  const place = original ? originalCoverLayout(logo.width, logo.height) : coverPlacement(input.art)
+  const cover = doc.addPage([LETTER_W, LETTER_H])
+  cover.drawRectangle({ x: 0, y: 0, width: LETTER_W, height: LETTER_H, color: paper })
+  cover.drawImage(logo, { x: place.x, y: place.y, width: place.width, height: place.height })
+  let titleSize = original ? 26 : 36
+  while (titleSize > 16 && bold.widthOfTextAtSize(input.title, titleSize) > 480) titleSize -= 2
+  drawCentered(cover, input.title, place.titleY, titleSize, bold, titleColor)
+  drawCentered(cover, input.dateLabel, place.dateY, original ? 14 : 16, font, dateColor)
+  footer(cover, font, input.pageNumber, foot)
 }

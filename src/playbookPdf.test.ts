@@ -1,8 +1,18 @@
 import { PDFDocument } from 'pdf-lib'
 import { describe, expect, it } from 'vitest'
 import { COLOR_ART, LINE_ART, artContentCenter } from './endZoneArt'
-import { END_ZONE_COLOR, END_ZONE_LINE } from './endZoneArt'
-import { buildPlaybookDocument, buildPlaybookPdf, coverDate, coverPlacement, logoAsset, renderDiagramSvg } from './playbookPdf'
+import { END_ZONE_LINE } from './endZoneArt'
+import {
+  buildPlaybookDocument,
+  buildPlaybookPdf,
+  coverDate,
+  coverMode,
+  coverPlacement,
+  loadCoverArt,
+  logoAsset,
+  originalCoverLayout,
+  renderDiagramSvg,
+} from './playbookPdf'
 import { createPlay } from './play'
 
 function tinyPng(): Uint8Array {
@@ -14,11 +24,46 @@ function tinyPng(): Uint8Array {
 
 const TINY_PNG = tinyPng()
 
+function tinyJpeg(): Uint8Array {
+  const bin = atob(
+    '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDABQODxIPDRQSEBIXFRQYHjIhHhwcHj0sLiQySUBMS0dARkVQWnNiUFVtVkVGZIhlbXd7gYKBTmCNl4x9lnN+gXz/2wBDARUXFx4aHjshITt8U0ZTfHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHx8fHz/wAARCAAIAAgDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDlqKKKAP/Z',
+  )
+  const bytes = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+  return bytes
+}
+
 describe('playbook pdf cover', () => {
-  it('uses the color dog for color and the line dog for white', () => {
-    expect(logoAsset('color')).toBe(END_ZONE_COLOR)
+  it('uses the original art on a color cover and the line dog on white', () => {
+    expect(coverMode('color')).toBe('original')
+    expect(coverMode('print')).toBe('line')
+    expect(logoAsset('color')).toBeNull()
     expect(logoAsset('print')).toBe(END_ZONE_LINE)
     expect(coverDate(new Date(2026, 9, 10))).toBe('October 10, 2026')
+  })
+
+  it('centers the original art at about six inches, with the title underneath', () => {
+    const place = originalCoverLayout(1187, 1213)
+    expect(place.width).toBeCloseTo(432)
+    expect(place.x).toBeCloseTo((612 - place.width) / 2)
+    expect(place.y).toBeGreaterThan(place.titleY)
+    expect(place.titleY).toBeGreaterThan(place.dateY)
+    expect(place.dateY).toBeGreaterThan(40)
+    expect(place.y + place.height).toBeLessThan(792)
+  })
+
+  it('loads the original jpeg only for a color cover', async () => {
+    const color = await loadCoverArt('color')
+    expect(color.kind).toBe('jpeg')
+    expect(color.mode).toBe('original')
+    expect(color.bytes[0]).toBe(0xff)
+    expect(color.bytes[1]).toBe(0xd8)
+    expect(color.bytes.byteLength).toBeGreaterThan(30_000)
+    expect(color.bytes.byteLength).toBeLessThan(400_000)
+    const print = await loadCoverArt('print')
+    expect(print.kind).toBe('png')
+    expect(print.mode).toBe('line')
+    expect(print.bytes).not.toEqual(color.bytes)
   })
 
   it('centers the visible dog above the title', () => {
@@ -68,10 +113,13 @@ describe('playbook document', () => {
       title: 'Dawgs Playbook',
       dateLabel: 'October 10, 2026',
       style: 'color',
-      logoPng: TINY_PNG,
+      logoBytes: tinyJpeg(),
+      logoKind: 'jpeg',
+      coverMode: 'original',
       art: COLOR_ART,
       plays: [play, { ...play, number: 2, name: 'Power', category: 'Run play', notes: 'Block the end and bounce outside.' }],
     })
+    expect(new TextDecoder('latin1').decode(bytes)).toContain('/DCTDecode')
     const doc = await PDFDocument.load(bytes)
     expect(doc.getPageCount()).toBe(4)
     expect(doc.getTitle()).toBe('Dawgs Playbook')
@@ -89,7 +137,9 @@ describe('playbook document', () => {
       title: 'Dawgs Playbook',
       dateLabel: 'October 10, 2026',
       style: 'print',
-      logoPng: TINY_PNG,
+      logoBytes: TINY_PNG,
+      logoKind: 'png',
+      coverMode: 'line',
       art: LINE_ART,
       plays,
     })
