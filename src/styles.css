@@ -113,9 +113,10 @@ textarea { min-height: 96px; resize: vertical; }
 .avatar-letter {
   font-family: var(--display);
   font-weight: 700;
-  font-size: 22px;
+  font-size: 38px;
   line-height: 1;
   letter-spacing: 0;
+  display: block;
   color: #e5e5e5;
   text-shadow:
     -1px -1px 0 #000,
