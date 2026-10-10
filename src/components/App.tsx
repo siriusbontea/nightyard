@@ -162,6 +162,11 @@ export function App() {
       } else if (event.key === ' ' && play) {
         event.preventDefault()
         togglePlay()
+      } else if ((event.key === 'Delete' || event.key === 'Backspace') && !event.metaKey && !event.ctrlKey && !event.altKey) {
+        if (sheet || !play || !selectedPlayerId) return
+        if (!play.strokes.some((stroke) => stroke.playerId === selectedPlayerId)) return
+        event.preventDefault()
+        dropRoute(selectedPlayerId)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -180,6 +185,14 @@ export function App() {
   function stopPlayback() {
     setPlaying(false)
     setT(0)
+  }
+
+  function dropRoute(playerId: string) {
+    if (!play || !play.strokes.some((stroke) => stroke.playerId === playerId)) return
+    stopPlayback()
+    book.update(removeRoute(play, playerId))
+    setSelectedStrokeId(null)
+    book.notify('Deleted. Tap Undo.', () => book.undo())
   }
 
   function openAccount(mode: 'in' | 'up') {
@@ -648,9 +661,6 @@ export function App() {
           </div>
         ) : selected && play.strokes.some((stroke) => stroke.playerId === selected.id) ? (
           <div class="route-options">
-            <button type="button" class="chip" {...tip('Pick a new path')} onClick={() => { setRedrawPlayerId(null); setSheet('presets') }}>
-              Change route
-            </button>
             {selected.side === 'defense' || play.format !== '11v11' ? null : (
               <button type="button" class="chip" {...tip('Block in front')} onClick={() => assign(selected.id, 'block')}>
                 Block
@@ -667,18 +677,6 @@ export function App() {
               }}
             >
               Redraw
-            </button>
-            <button
-              type="button"
-              class="chip"
-              {...tip('Take the path off')}
-              onClick={() => {
-                stopPlayback()
-                book.update(removeRoute(play, selected.id))
-                setSelectedStrokeId(null)
-              }}
-            >
-              Remove route
             </button>
             <button type="button" class="chip" {...tip('Flip this path')} onClick={() => applyBreak(breakSide === 'left' ? 'right' : 'left')}>
               Flip
@@ -707,6 +705,25 @@ export function App() {
               }}
             >
               Erase
+            </button>
+          </div>
+        ) : null}
+        {selected && play.strokes.some((stroke) => stroke.playerId === selected.id) ? (
+          <div class="route-bar">
+            <button type="button" class="route-remove" {...tip('Remove this route')} onClick={() => dropRoute(selected.id)}>
+              <TrashIcon />
+              Remove route
+            </button>
+            <button
+              type="button"
+              class="route-change"
+              {...tip('Change this path')}
+              onClick={() => {
+                setRedrawPlayerId(null)
+                setSheet('presets')
+              }}
+            >
+              Change
             </button>
           </div>
         ) : null}
@@ -999,6 +1016,17 @@ function Toast(props: { message: string; undo: (() => void) | null }) {
         </button>
       ) : null}
     </div>
+  )
+}
+
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+      <path d="M5 7h14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+      <path d="M9 7V5.5h6V7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+      <path d="M7.5 7l.8 12h7.4l.8-12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+      <path d="M10 11v5M14 11v5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+    </svg>
   )
 }
 

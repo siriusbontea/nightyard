@@ -23,6 +23,8 @@ describe('field hints', () => {
   it('keeps button tips to eight words', () => {
     for (const text of [
       'Your account',
+      'Remove this route',
+      'Change this path',
       'Undo the last change',
       'Open your plays',
       'Pick a ready path',
