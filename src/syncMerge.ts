@@ -87,9 +87,16 @@ export function planMerge(local: Play[], remote: RemoteRow[], tombstones: Tombst
   for (const row of remote) {
     seen.add(row.playId)
     const localPlay = byId.get(row.playId)
-    const localStamp = localPlay ? localPlay.updatedAt : tombs.get(row.playId)
+    const tombStamp = tombs.get(row.playId)
+    const localStamp = localPlay ? localPlay.updatedAt : tombStamp
     if (localStamp === undefined) {
       if (!row.deleted && row.play) byId.set(row.playId, row.play)
+      continue
+    }
+    // A delete stamped at the same moment as the server row still wins. A tie between two live copies keeps the server.
+    if (!localPlay && tombStamp !== undefined && tombStamp >= row.updatedAt) {
+      byId.delete(row.playId)
+      queueDelete(row.playId, tombStamp)
       continue
     }
     if (localStamp > row.updatedAt) {
@@ -139,4 +146,14 @@ export function planMerge(local: Play[], remote: RemoteRow[], tombstones: Tombst
     upserts,
     keepTombstones: [...keep.entries()].map(([playId, updatedAt]) => ({ playId, updatedAt })),
   }
+}
+
+/** Keep the newest delete for each play. A delete that lands mid-sync is not dropped. */
+export function mergeTombstones(planned: Tombstone[], fresh: Tombstone[]): Tombstone[] {
+  const map = new Map<string, number>()
+  for (const item of [...planned, ...fresh]) {
+    const have = map.get(item.playId)
+    if (have === undefined || item.updatedAt > have) map.set(item.playId, item.updatedAt)
+  }
+  return [...map.entries()].map(([playId, updatedAt]) => ({ playId, updatedAt }))
 }

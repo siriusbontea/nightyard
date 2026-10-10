@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { planMerge, remoteRow, withoutUntouchedSeed, type RemoteRow } from './syncMerge'
+import { mergeTombstones, planMerge, remoteRow, withoutUntouchedSeed, type RemoteRow } from './syncMerge'
 import type { Play } from './types'
 
 function play(id: string, updatedAt: number, name = id): Play {
@@ -47,6 +47,19 @@ describe('planMerge', () => {
     const tie = planMerge([play('a', 9, 'Phone')], [row('a', 9, false, 'Server')], [])
     expect(tie.plays.map((item) => item.name)).toEqual(['Server'])
     expect(tie.upserts).toEqual([])
+  })
+
+  it('lets a same-moment delete beat a live server row', () => {
+    const tied = planMerge([], [row('a', 9, false, 'Still there')], [{ playId: 'a', updatedAt: 9 }])
+    expect(tied.plays).toEqual([])
+    expect(tied.keepTombstones).toEqual([{ playId: 'a', updatedAt: 9 }])
+  })
+
+  it('keeps a delete that arrives while a sync is already planned', () => {
+    expect(mergeTombstones([{ playId: 'a', updatedAt: 4 }], [{ playId: 'a', updatedAt: 9 }, { playId: 'b', updatedAt: 3 }])).toEqual([
+      { playId: 'a', updatedAt: 9 },
+      { playId: 'b', updatedAt: 3 },
+    ])
   })
 
   it('drops a play when the server delete is newer and pushes a newer local delete', () => {

@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'preact/hooks'
+import { useEffect, useState } from 'preact/hooks'
 import { categoryOf, groupPlays } from '../categories'
-import { fetchServerPlays, playThumb } from '../savedPlays'
+import { playThumb } from '../savedPlays'
 import {
   categoryAllOn,
   numberedPlays,
@@ -21,37 +21,11 @@ export function PlaybookSheet(props: {
   onClose: () => void
   onMake: (choice: { title: string; style: ExportStyle; plays: Play[] }) => void
 }) {
-  const [plays, setPlays] = useState<Play[] | null>(null)
-  const [offline, setOffline] = useState(false)
   const [title, setTitle] = useState(() => playbookTitle(props.defaultTitle))
   const [style, setStyle] = useState<ExportStyle>('color')
   const [picked, setPicked] = useState<string[]>([])
-  const localPlays = useRef(props.localPlays)
-  localPlays.current = props.localPlays
-
-  useEffect(() => {
-    let cancel = false
-    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-      setPlays(localPlays.current)
-      setOffline(true)
-      return
-    }
-    fetchServerPlays()
-      .then((next) => {
-        if (!cancel) setPlays(next)
-      })
-      .catch(() => {
-        if (!cancel) {
-          setPlays(localPlays.current)
-          setOffline(true)
-        }
-      })
-    return () => {
-      cancel = true
-    }
-  }, [])
-
-  const list = plays ?? []
+  const offline = typeof navigator !== 'undefined' && navigator.onLine === false
+  const list = props.localPlays
   const listKey = list.map((play) => play.id).join('\n')
   useEffect(() => {
     setPicked(listKey ? listKey.split('\n') : [])
@@ -104,11 +78,11 @@ export function PlaybookSheet(props: {
           White (print)
         </button>
       </div>
-      <p class="pick-count">{plays === null ? 'Loading your plays…' : pickCountLabel(ordered.length)}</p>
+      <p class="pick-count">{pickCountLabel(ordered.length)}</p>
       <p class="fine">Cover, a quick view, then one page for each play.</p>
       {offline ? <p class="fine">Offline — showing plays on this phone.</p> : null}
       <div class="pick-scroll">
-        {plays !== null && groups.length === 0 ? <p class="empty-copy">No saved plays yet.</p> : null}
+        {groups.length === 0 ? <p class="empty-copy">No saved plays yet.</p> : null}
         {groups.map((group) => {
           const ids = group.plays.map((play) => play.id)
           const all = categoryAllOn(picked, ids)
@@ -166,7 +140,7 @@ export function PlaybookSheet(props: {
         type="button"
         class="primary wide"
         data-tip="Save the playbook"
-        disabled={props.busy || plays === null || ordered.length === 0}
+        disabled={props.busy || ordered.length === 0}
         onClick={make}
       >
         {props.busy ? 'Making the PDF…' : 'Make PDF'}

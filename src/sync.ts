@@ -1,7 +1,8 @@
 import { chooseBookName, type BookNameStamp } from './bookName'
+import { sameJson } from './jsonEqual'
 import { pb } from './pb'
 import { bookIdForOwner, planPlaybookMerge, sanitizePlaybook, type RemotePlaybook } from './playbooks'
-import { planMerge, remoteRow, withoutUntouchedSeed, type Tombstone } from './syncMerge'
+import { mergeTombstones, planMerge, remoteRow, withoutUntouchedSeed, type Tombstone } from './syncMerge'
 import { loadBookTombstones, loadTombstones, saveBookTombstones, saveTombstones } from './tombstones'
 import type { Play, Playbook } from './types'
 
@@ -31,7 +32,27 @@ let handlers: SyncHandlers | null = null
 let freshSeed: { id: string; updatedAt: number } | null = null
 let tail: Promise<void> = Promise.resolve()
 let timer = 0
+let pullTimer = 0
+let running = false
+let again = false
+let syncDepth = 0
+let lastPushedName: BookNameStamp | null = null
 const listeners = new Set<Listener>()
+
+/** Test hook. Clears the module so one case cannot leak into the next. */
+export function resetSyncForTests() {
+  phase = 'pending'
+  handlers = null
+  freshSeed = null
+  tail = Promise.resolve()
+  timer = 0
+  pullTimer = 0
+  running = false
+  again = false
+  syncDepth = 0
+  lastPushedName = null
+  listeners.clear()
+}
 
 export function currentUsername(): string | null {
   if (!pb.authStore.isValid) return null
@@ -119,25 +140,39 @@ async function writePlay(ownerId: string, playId: string, data: unknown, deleted
   }
 }
 
+function tombAt(playId: string, tombs: Tombstone[]): number | undefined {
+  return tombs.find((item) => item.playId === playId)?.updatedAt
+}
+
+function blocked(play: Play, tombs: Tombstone[]): boolean {
+  const stamp = tombAt(play.id, tombs)
+  return stamp !== undefined && stamp >= play.updatedAt
+}
+
 async function runSync() {
   if (!pb.authStore.isValid || !currentUsername()) {
     phase = 'local'
     publish()
     return
   }
-  phase = 'pending'
-  publish()
-  if (typeof navigator !== 'undefined' && navigator.onLine === false) return
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    publish()
+    return
+  }
   const bound = handlers
   if (!bound) return
+  const pushing = phase === 'pending'
+  syncDepth += 1
   try {
     const ownerEarly = pb.authStore.record?.id
     if (ownerEarly) bound.adoptOwner(ownerEarly)
     const records = await pb.collection('plays').getFullList({ requestKey: null })
     const remote = records.map((record) => remoteRow(record)).filter((row): row is NonNullable<typeof row> => !!row)
+    const remotePlay = new Map(remote.flatMap((row) => (row.play ? [[row.playId, row.play] as const] : [])))
     const local = withoutUntouchedSeed(bound.getPlays(), remote, freshSeed)
     freshSeed = null
-    const plan = planMerge(local, remote, loadTombstones())
+    const tombs = mergeTombstones([], loadTombstones())
+    const plan = planMerge(local, remote, tombs)
     const ownerId = pb.authStore.record?.id
     if (!ownerId) return
     const home = bound.getCurrentBookId() || bookIdForOwner(ownerId)
@@ -151,14 +186,35 @@ async function runSync() {
       else upserts.push(next)
       return next
     })
-    bound.applyPlays(plays)
-    saveTombstones(plan.keepTombstones)
-    for (const play of upserts) await writePlay(ownerId, play.id, play, false)
-    for (const item of plan.keepTombstones) {
-      await writePlay(ownerId, item.playId, { id: item.playId, updatedAt: item.updatedAt }, true)
+    const liveTombs = mergeTombstones(plan.keepTombstones, loadTombstones())
+    const visible = plays.filter((play) => !blocked(play, liveTombs))
+    if (!sameJson(visible, bound.getPlays())) bound.applyPlays(visible)
+    saveTombstones(liveTombs)
+    for (const play of upserts) {
+      const stamp = tombAt(play.id, loadTombstones())
+      if (stamp !== undefined && stamp >= play.updatedAt) continue
+      const previous = remotePlay.get(play.id)
+      if (previous && sameJson(previous, play)) continue
+      await writePlay(ownerId, play.id, play, false)
+      remotePlay.set(play.id, play)
     }
-    saveTombstones([])
+    const pushed = new Map<string, number>()
+    for (const item of mergeTombstones(liveTombs, loadTombstones())) {
+      await writePlay(ownerId, item.playId, { id: item.playId, updatedAt: item.updatedAt }, true)
+      pushed.set(item.playId, item.updatedAt)
+      remotePlay.delete(item.playId)
+    }
+    saveTombstones(loadTombstones().filter((item) => (pushed.get(item.playId) ?? -1) < item.updatedAt))
     await syncPlaybooks(ownerId)
+    for (const play of bound.getPlays()) {
+      const stamp = tombAt(play.id, loadTombstones())
+      if (stamp !== undefined && stamp >= play.updatedAt) continue
+      const previous = remotePlay.get(play.id)
+      if (previous && (sameJson(previous, play) || previous.updatedAt >= play.updatedAt)) continue
+      await writePlay(ownerId, play.id, play, false)
+      remotePlay.set(play.id, play)
+    }
+    if (loadTombstones().length > 0) again = true
     try {
       await reconcileBookName(ownerId)
     } catch {
@@ -166,9 +222,11 @@ async function runSync() {
     }
     phase = 'synced'
   } catch {
-    phase = 'pending'
+    if (pushing) phase = 'pending'
+  } finally {
+    syncDepth -= 1
+    publish()
   }
-  publish()
 }
 
 function bookFromRecord(record: { book_id?: unknown; name?: unknown; deleted?: unknown; data?: unknown }): RemotePlaybook | null {
@@ -226,13 +284,20 @@ async function syncPlaybooks(ownerId: string) {
   const plan = planPlaybookMerge(bound.getBooks(), remote, loadBookTombstones())
   const wanted = bound.getCurrentBookId()
   const current = plan.books.some((book) => book.id === wanted) ? wanted : (plan.books[0]?.id ?? '')
-  bound.applyBooks(plan.books, current)
-  saveBookTombstones(plan.keep)
-  for (const book of plan.upserts) await writeBook(ownerId, book, false)
-  for (const item of plan.keep) {
+  const remoteBook = new Map(remote.flatMap((row) => (row.book ? [[row.bookId, row.book] as const] : [])))
+  if (!sameJson(plan.books, bound.getBooks()) || current !== bound.getCurrentBookId()) bound.applyBooks(plan.books, current)
+  const keep = plan.keep
+  saveBookTombstones(keep)
+  for (const book of plan.upserts) {
+    const previous = remoteBook.get(book.id)
+    if (previous && sameJson(previous, book)) continue
+    await writeBook(ownerId, book, false)
+  }
+  for (const item of keep) {
     await writeBook(ownerId, { id: item.id, name: 'Deleted', updatedAt: item.updatedAt, data: {} }, true)
   }
-  saveBookTombstones([])
+  const pushed = new Set(keep.map((item) => item.id))
+  saveBookTombstones(loadBookTombstones().filter((item) => !pushed.has(item.id)))
 }
 
 async function reconcileBookName(ownerId: string) {
@@ -243,11 +308,14 @@ async function reconcileBookName(ownerId: string) {
   const remoteAt = typeof user.playbook_named_at === 'number' ? user.playbook_named_at : 0
   const local = bound.getBookName()
   const choice = chooseBookName(local, { name: remoteName, namedAt: remoteAt })
-  if (choice.push) {
+  const alreadyPushed =
+    lastPushedName !== null && lastPushedName.name === choice.name && (lastPushedName.namedAt === choice.namedAt || !remoteName)
+  if (choice.push && !alreadyPushed) {
     await pb.collection('users').update(ownerId, {
       playbook_name: choice.name,
       playbook_named_at: choice.namedAt,
     })
+    lastPushedName = { name: choice.name, namedAt: choice.namedAt }
   }
   if (choice.name !== local.name || choice.namedAt !== local.namedAt) {
     bound.applyBookName(choice.name, choice.namedAt)
@@ -257,7 +325,26 @@ async function reconcileBookName(ownerId: string) {
 }
 
 export function syncNow(): Promise<void> {
-  const run = tail.then(() => runSync(), () => runSync())
+  if (!pb.authStore.isValid || !currentUsername()) {
+    phase = 'local'
+    publish()
+    return Promise.resolve()
+  }
+  if (running) {
+    again = true
+    return tail
+  }
+  running = true
+  const run = (async () => {
+    try {
+      do {
+        again = false
+        await runSync()
+      } while (again)
+    } finally {
+      running = false
+    }
+  })()
   tail = run.then(
     () => undefined,
     () => undefined,
@@ -265,15 +352,42 @@ export function syncNow(): Promise<void> {
   return run
 }
 
+function later(delay: number, fire: () => void): number {
+  const host = typeof window === 'undefined' ? globalThis : window
+  return host.setTimeout(fire, delay) as unknown as number
+}
+
+function cancel(id: number) {
+  const host = typeof window === 'undefined' ? globalThis : window
+  host.clearTimeout(id)
+}
+
+/** A local edit. Shows Saving…, then one sync after a short pause. */
 export function scheduleSync() {
   if (!pb.authStore.isValid) return
   phase = 'pending'
+  if (syncDepth > 0) {
+    again = true
+    return
+  }
   publish()
-  if (typeof window === 'undefined') return
-  window.clearTimeout(timer)
-  timer = window.setTimeout(() => {
+  cancel(timer)
+  timer = later(400, () => {
     void syncNow()
-  }, 400)
+  })
+}
+
+/** A refresh with nothing new to upload. Does not flash Saving… by itself. */
+function requestPull() {
+  if (!pb.authStore.isValid || !currentUsername()) return
+  if (syncDepth > 0 || running) {
+    again = true
+    return
+  }
+  cancel(pullTimer)
+  pullTimer = later(400, () => {
+    void syncNow()
+  })
 }
 
 export function rememberDelete(playId: string, updatedAt = Date.now()) {
@@ -296,14 +410,29 @@ export function rememberBookDelete(bookId: string, updatedAt = Date.now()) {
 
 export function bootSync(next: SyncHandlers): () => void {
   handlers = next
+  let seenUser = currentUsername()
   const stopAuth = pb.authStore.onChange(() => {
+    const user = currentUsername()
+    const changed = user !== seenUser
+    seenUser = user
     publish()
-    if (pb.authStore.isValid) void syncNow()
+    if (!changed) return
+    if (user) void syncNow()
+    else {
+      phase = 'local'
+      publish()
+    }
   })
-  const onOnline = () => {
-    void syncNow()
+  const onOnline = () => requestPull()
+  const onFocus = () => {
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
+    requestPull()
   }
-  window.addEventListener('online', onOnline)
+  if (typeof window !== 'undefined') {
+    window.addEventListener('online', onOnline)
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onFocus)
+  }
   void (async () => {
     if (pb.authStore.isValid) {
       try {
@@ -313,12 +442,16 @@ export function bootSync(next: SyncHandlers): () => void {
       }
     }
     publish()
-    if (pb.authStore.isValid) await syncNow()
+    if (pb.authStore.isValid && currentUsername()) await syncNow()
   })()
   return () => {
     if (handlers === next) handlers = null
     stopAuth()
-    window.removeEventListener('online', onOnline)
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('online', onOnline)
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onFocus)
+    }
   }
 }
 

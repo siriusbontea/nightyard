@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { commit, createHistory, redo, undo, canRedo, canUndo, type History } from './history'
 import { isGuest } from './guest'
+import { sameJson } from './jsonEqual'
 import { createPlay, duplicatePlay, emptyBookStarters, parseBundle, renamePlay, resetPlay, sanitizePlay } from './play'
 import { adoptOwnerBook, copyName, emptyPlaybook, movePlay, playsInBook, renamePlaybook } from './playbooks'
 import { deletePlay, deletePlaybookRecord, loadPlaybook, saveCurrentBookId, savePlay, savePlaybookName, savePlaybookRecord } from './storage'
@@ -17,6 +18,7 @@ import {
   subscribeSync,
   type SyncState,
 } from './sync'
+import { loadTombstones } from './tombstones'
 import type { FormatId, Play, Playbook } from './types'
 
 const AUTOSAVE_TIP = 'night-yard-autosave-tip'
@@ -38,7 +40,7 @@ function markAutosaveTip() {
 }
 
 function samePlay(a: Play, b: Play): boolean {
-  return JSON.stringify(a) === JSON.stringify(b)
+  return sameJson(a, b)
 }
 
 function replacePlay(list: Play[], play: Play): Play[] {
@@ -71,7 +73,8 @@ export function usePlaybook() {
   const [guest, setGuest] = useState(false)
   const [account, setAccount] = useState<SyncState>(getSyncState())
   const [online, setOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine))
-  const deletedRef = useRef<Play | null>(null)
+  const deletedRef = useRef<{ play: Play; index: number } | null>(null)
+  const savedPlay = useRef<Play | null>(null)
   const playsRef = useRef(plays)
   const historyRef = useRef(history)
   const memoryOnlyRef = useRef(false)
@@ -136,30 +139,43 @@ export function usePlaybook() {
   }
 
   function acceptPlays(next: Play[]) {
+    const tombs = loadTombstones()
+    const kept = next.filter((play) => {
+      const stamp = tombs.find((item) => item.playId === play.id)?.updatedAt
+      return stamp === undefined || play.updatedAt > stamp
+    })
+    const current = historyRef.current
+    const updated = current ? (kept.find((item) => item.id === current.present.id) ?? null) : null
+    const openSame =
+      !current ||
+      (updated !== null && updated.bookId === currentIdRef.current && (updated === current.present || samePlay(updated, current.present)))
+    if (sameJson(kept, playsRef.current) && openSame) return
     const previous = playsRef.current
     if (keepsLocal()) {
-      const ids = new Set(next.map((item) => item.id))
+      const ids = new Set(kept.map((item) => item.id))
       for (const item of previous) {
         if (!ids.has(item.id)) void deletePlay(item.id)
       }
-      for (const item of next) void savePlay(item)
+      for (const item of kept) void savePlay(item)
     }
-    playsRef.current = next
-    setPlays(next)
-    const current = historyRef.current
+    playsRef.current = kept
+    setPlays(kept)
     if (!current) {
-      openHistory(visiblePlays(next)[0] ?? null)
+      openHistory(visiblePlays(kept)[0] ?? null)
       return
     }
-    const updated = next.find((item) => item.id === current.present.id) ?? null
-    if (updated && updated.bookId === currentIdRef.current && (updated === current.present || samePlay(updated, current.present))) return
-    const open = updated && updated.bookId === currentIdRef.current ? updated : (visiblePlays(next)[0] ?? null)
+    if (openSame) return
+    const open = updated && updated.bookId === currentIdRef.current ? updated : (visiblePlays(kept)[0] ?? null)
     openHistory(open)
+    if (open) savedPlay.current = open
   }
 
   function applyBooks(next: Playbook[], wanted: string) {
     const previous = booksRef.current
     const id = next.some((book) => book.id === wanted) ? wanted : (next[0]?.id ?? '')
+    const ids = new Set(next.map((book) => book.id))
+    const orphans = Boolean(id) && playsRef.current.some((play) => !play.bookId || !ids.has(play.bookId))
+    if (!orphans && sameJson(next, previous) && id === currentIdRef.current) return
     booksRef.current = next
     currentIdRef.current = id
     setBooks(next)
@@ -177,7 +193,6 @@ export function usePlaybook() {
     }
     const open = historyRef.current
     if (open && open.present.bookId !== id) openHistory(visiblePlays(playsRef.current, id)[0] ?? null)
-    const ids = new Set(next.map((book) => book.id))
     if (!id || !playsRef.current.some((play) => !play.bookId || !ids.has(play.bookId))) return
     const now = Date.now()
     const fixed = playsRef.current.map((play) =>
@@ -188,7 +203,6 @@ export function usePlaybook() {
     setPlays(fixed)
     if (!keepsLocal()) return
     for (const play of changed) void savePlay(play)
-    if (changed.length > 0) scheduleSync()
   }
 
   useEffect(() => subscribeSync(setAccount), [])
@@ -300,11 +314,19 @@ export function usePlaybook() {
 
   useEffect(() => {
     if (!ready || !play || memoryOnly || guest || guestRef.current) return
+    if (savedPlay.current && samePlay(savedPlay.current, play)) return
+    if (!savedPlay.current) {
+      savedPlay.current = play
+      return
+    }
     setSaved(false)
     const handle = window.setTimeout(() => {
-      if (!keepsLocal()) return
-      savePlay(play)
+      const current = historyRef.current?.present
+      if (!current || !keepsLocal()) return
+      if (savedPlay.current && samePlay(savedPlay.current, current)) return
+      savePlay(current)
         .then(() => {
+          savedPlay.current = current
           setSaved(true)
           scheduleSync()
         })
@@ -421,24 +443,25 @@ export function usePlaybook() {
   }
 
   async function remove(id: string) {
-    const found = playsRef.current.find((item) => item.id === id)
+    const index = playsRef.current.findIndex((item) => item.id === id)
+    const found = index >= 0 ? playsRef.current[index] : undefined
     if (!found) return
-    if (keepsLocal()) {
-      try {
-        await deletePlay(id)
-      } catch {
-        notify('Could not delete that play.')
-        return
-      }
-    }
-    deletedRef.current = found
+    deletedRef.current = { play: found, index }
     const remaining = playsRef.current.filter((item) => item.id !== id)
     playsRef.current = remaining
     setPlays(remaining)
-    if (keepsLocal()) rememberDelete(id)
-    if (historyRef.current?.present.id === id) {
+    const deletingOpen = historyRef.current?.present.id === id
+    if (keepsLocal()) {
+      rememberDelete(id, Math.max(Date.now(), found.updatedAt + 1))
+      void deletePlay(id).catch(() => notify('Could not delete that play.'))
+    }
+    if (deletingOpen) {
       const source = found.bookId ?? currentIdRef.current
-      openHistory(remaining.find((item) => item.bookId === source) ?? null)
+      const sibling = remaining.find((item) => item.bookId === source)
+      if (sibling) {
+        savedPlay.current = sibling
+        openHistory(sibling)
+      } else await create()
     }
     notify('Deleted. Tap Undo.', () => {
       void restoreDeleted()
@@ -446,9 +469,10 @@ export function usePlaybook() {
   }
 
   async function restoreDeleted() {
-    const found = deletedRef.current
-    if (!found) return
+    const saved = deletedRef.current
+    if (!saved) return
     deletedRef.current = null
+    const found = saved.play
     const restored = { ...found, updatedAt: Date.now() }
     if (keepsLocal()) {
       try {
@@ -460,11 +484,11 @@ export function usePlaybook() {
       forgetDelete(restored.id)
       scheduleSync()
     }
-    const list = playsRef.current.some((item) => item.id === restored.id)
-      ? playsRef.current.map((item) => (item.id === restored.id ? restored : item))
-      : [restored, ...playsRef.current]
+    const list = playsRef.current.filter((item) => item.id !== restored.id)
+    list.splice(Math.min(saved.index, list.length), 0, restored)
     playsRef.current = list
     setPlays(list)
+    savedPlay.current = restored
     const next = createHistory(restored)
     historyRef.current = next
     setHistory(next)
@@ -753,6 +777,7 @@ export function usePlaybook() {
   return {
     ready,
     plays: shown,
+    allPlays: plays,
     books,
     currentBookId: currentId,
     bookName,

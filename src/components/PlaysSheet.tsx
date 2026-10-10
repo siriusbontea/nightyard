@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { PLAY_CATEGORIES, categoriesFor, categoryOf, groupPlays, type PlayCategory } from '../categories'
-import { fetchServerPlays, filterSavedPlays, playThumb, showsSavedSearch } from '../savedPlays'
+import { filterSavedPlays, playThumb, showsSavedSearch } from '../savedPlays'
 import type { Play, Playbook } from '../types'
 import { formatShort } from '../types'
 import { tip } from '../hints'
@@ -50,8 +50,6 @@ export function PlaysSheet(props: {
   onNeedAccount: () => void
   onClose: () => void
 }) {
-  const [server, setServer] = useState<Play[] | null>(null)
-  const [offline, setOffline] = useState(false)
   const [filter, setFilter] = useState<PlayCategory | 'All'>('All')
   const [query, setQuery] = useState('')
   const [renaming, setRenaming] = useState(false)
@@ -77,33 +75,8 @@ export function PlaysSheet(props: {
     return () => document.removeEventListener('pointerdown', close)
   }, [menu])
 
-  useEffect(() => {
-    if (!props.signedIn) {
-      setServer(null)
-      setOffline(false)
-      return
-    }
-    let cancel = false
-    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-      setOffline(true)
-      setServer(null)
-      return
-    }
-    fetchServerPlays()
-      .then((next) => {
-        if (!cancel) setServer(next)
-      })
-      .catch(() => {
-        if (!cancel) setOffline(true)
-      })
-    return () => {
-      cancel = true
-    }
-  }, [props.signedIn])
-
-  const matches = (play: Play) => play.bookId === props.currentBookId || (props.onlyBook && !play.bookId)
-  const remote = server ? server.filter(matches) : null
-  const source = remote && (remote.length > 0 || props.plays.length === 0) ? remote : props.plays
+  const offline = props.signedIn && typeof navigator !== 'undefined' && navigator.onLine === false
+  const source = props.plays
   const shown = filterSavedPlays(source, query)
   const otherBooks = props.books.filter((book) => book.id !== props.currentBookId)
   const groups = groupPlays(shown, filter)
@@ -229,7 +202,6 @@ export function PlaysSheet(props: {
         <p class="backup-label">Your saved plays</p>
         {props.signedIn ? null : <p class="fine">Sign in to open these on any device.</p>}
         {offline ? <p class="fine">Offline — showing plays on this phone</p> : null}
-        {props.signedIn && server === null && !offline ? <p class="fine">Loading your plays…</p> : null}
         <div class="filter-row">
           <button type="button" class="chip" aria-pressed={filter === 'All'} onClick={() => setFilter('All')}>
             All

@@ -1,5 +1,4 @@
 import { FIELD_WIDTH, displayStroke, plantedMarker } from './geometry'
-import { pb } from './pb'
 import { isPlayerShown, sanitizePlay } from './play'
 import { remoteRow } from './syncMerge'
 import type { Play, Stroke } from './types'
@@ -28,12 +27,6 @@ export function filterSavedPlays(plays: Play[], query: string): Play[] {
   const q = query.trim().toLowerCase()
   if (!q || !showsSavedSearch(sorted.length)) return sorted
   return sorted.filter((play) => play.name.toLowerCase().includes(q))
-}
-
-/** Fresh list from the signed-in account. Deleted rows stay out. */
-export async function fetchServerPlays(): Promise<Play[]> {
-  const records = await pb.collection('plays').getFullList({ requestKey: null })
-  return savedPlaysFromRecords(records)
 }
 
 /** Small field picture: players and routes only, no numbers or end-zone art. */

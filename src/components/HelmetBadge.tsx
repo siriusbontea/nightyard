@@ -6,7 +6,7 @@ export function HelmetBadge(props: { letter: string }) {
   return (
     <svg class="helmet" viewBox="0 0 100 104" aria-hidden="true">
       <g transform="translate(100 0) scale(-1 1)">
-        <path class="helmet-mask" d={MASK} fill="#5A554E" fill-rule="evenodd" stroke="#2A2622" stroke-width="2.2" stroke-linejoin="round" />
+        <path class="helmet-mask" d={MASK} fill="#A3A3A3" fill-rule="evenodd" stroke="#6B6B6B" stroke-width="2.2" stroke-linejoin="round" />
         <path class="helmet-shell" d={SHELL} fill="#F9682D" stroke="#1A140F" stroke-width="2.4" stroke-linejoin="round" />
         <circle cx="44" cy="60.5" r="5.3" fill="#1A1816" />
         <circle cx="33.2" cy="72.6" r="1.9" fill="#1A1816" />

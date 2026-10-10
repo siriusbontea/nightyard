@@ -440,7 +440,7 @@ export function App() {
         {savedOpen ? (
           <SavedPlaysSheet
             signedIn={Boolean(book.accountName)}
-            phonePlays={book.plays}
+            phonePlays={book.allPlays}
             onOpen={(next) => {
               void book.openSaved(next)
               setSavedOpen(false)
@@ -825,7 +825,7 @@ export function App() {
       ) : null}
       {sheet === 'playbook' && book.accountName ? (
         <PlaybookSheet
-          localPlays={book.plays}
+          localPlays={book.allPlays}
           defaultTitle={book.bookName}
           busy={busy}
           onClose={() => setSheet(null)}
@@ -952,7 +952,7 @@ export function App() {
       {savedOpen ? (
         <SavedPlaysSheet
           signedIn={Boolean(book.accountName)}
-          phonePlays={book.plays}
+          phonePlays={book.allPlays}
           onOpen={(next) => {
             void book.openSaved(next)
             setSelectedPlayerId(null)
