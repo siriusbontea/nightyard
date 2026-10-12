@@ -6,7 +6,6 @@ import {
   applyPreset,
   ballLabel,
   ballXOf,
-  clearPlayerStrokes,
   defaultBreakSide,
   deleteStroke,
   flipPlay,
@@ -24,6 +23,8 @@ import { isDefensePreset, isDirectionalPreset } from '../presets'
 import { renderPng } from '../pngExport'
 import { renderPlaybookFile, renderPlaybookPdf } from '../playbookPdf'
 import { playbookTitle } from '../playbookLayout'
+import { formationById } from '../formations'
+import { isGeneratedName, numberedName } from '../playNames'
 import { fieldHint, clearTipsSeen, markTipsSeen, tip, tipsSeen } from '../hints'
 import { HelmetBadge } from './HelmetBadge'
 import { downloadBlob, downloadText, shareOrDownload } from '../download'
@@ -48,12 +49,17 @@ type Tool = 'move' | 'draw'
 type SheetId = null | 'book' | 'presets' | 'player' | 'more' | 'export' | 'play' | 'account' | 'playbook'
 const SPEEDS = [0.5, 1, 1.5] as const
 const SPEED_WORD: Record<(typeof SPEEDS)[number], string> = { 0.5: 'Slow', 1: 'Normal', 1.5: 'Fast' }
-const DRAW_WORD: Record<StrokeKind, string> = { route: 'Line', motion: 'Walk', block: 'Block', run: 'Run' }
+const DRAW_WORD: Record<StrokeKind, string> = {
+  route: 'Draw a route',
+  motion: 'Move before the snap',
+  block: 'Block',
+  run: 'Run',
+}
 const DRAW_TIP: Record<StrokeKind, string> = {
   route: 'Draw a route',
   motion: 'Move before the snap',
-  block: 'Draw a block',
-  run: 'Draw a run',
+  block: 'Block',
+  run: 'Run',
 }
 const SAVE_EXPLAINER = 'Your plays save by themselves. Open them on any device by signing in.'
 
@@ -192,13 +198,23 @@ export function App() {
     stopPlayback()
     book.update(removeRoute(play, playerId))
     setSelectedStrokeId(null)
-    book.notify('Deleted. Tap Undo.', () => book.undo())
+    book.notify('Removed. Tap Undo.', () => book.undo())
   }
 
   function openAccount(mode: 'in' | 'up') {
     setAccountMode(mode)
     setSavePrompt(false)
     setSheet('account')
+  }
+
+  async function afterAccountDeleted() {
+    await book.forgetAccount()
+    setWelcomeOn(true)
+    setTourOn(false)
+    setSheet(null)
+    setSelectedPlayerId(null)
+    setSelectedStrokeId(null)
+    stopPlayback()
   }
 
   function tryFirst() {
@@ -412,11 +428,6 @@ export function App() {
         <button type="button" class="primary ghost" onClick={() => setSavedOpen(true)}>
           Open a saved play
         </button>
-        {book.guest && !showWelcome ? (
-          <button type="button" class="guest-chip" data-tip="Make a free account" onClick={() => openAccount('up')}>
-            Guest — make a free account to save
-          </button>
-        ) : null}
         <button type="button" class="text-btn" onClick={() => openAccount('in')}>
           {book.accountName ?? 'Sign in'}
         </button>
@@ -425,6 +436,7 @@ export function App() {
             saved={book.saved}
             start={accountMode}
             phonePlays={book.plays.length}
+            onDeleted={afterAccountDeleted}
             onClose={() => setSheet(null)}
           />
         ) : null}
@@ -461,10 +473,13 @@ export function App() {
             onClose={() => setSavedOpen(false)}
           />
         ) : null}
+        <div class="file-clip">
         <input
           ref={fileRef}
           class="file"
           type="file"
+          tabindex={-1}
+          aria-hidden="true"
           accept="application/json,.json"
           onChange={(event) => {
             const file = (event.currentTarget as HTMLInputElement).files?.[0]
@@ -479,6 +494,7 @@ export function App() {
             ;(event.currentTarget as HTMLInputElement).value = ''
           }}
         />
+        </div>
         {book.toast ? <Toast message={book.toast} undo={book.toastUndo} /> : null}
         <TipHost />
       </div>
@@ -528,6 +544,7 @@ export function App() {
           }}
           onCreateBook={addBook}
           onCreate={() => startNew()}
+          example={book.guest}
           saveStatus={book.syncStatus}
           saveKind={book.saveKind}
           onSaveStatus={
@@ -571,11 +588,6 @@ export function App() {
           <p class="sub">
             {play.formation} · {formatShort(play.format)} · Start on {ballLabel(play.los)}
           </p>
-          {book.guest && !showWelcome ? (
-            <button type="button" class="guest-chip" data-tip="Make a free account" onClick={() => openAccount('up')}>
-              Guest — make a free account to save
-            </button>
-          ) : null}
           <SaveChip
             label={book.syncStatus}
             kind={book.saveKind}
@@ -695,18 +707,6 @@ export function App() {
             <button type="button" class="text-btn" {...tip('Change this player')} onClick={() => setSheet('player')}>
               Edit
             </button>
-            <button
-              type="button"
-              class="text-btn"
-              {...tip('Erase their lines')}
-              onClick={() => {
-                book.update(clearPlayerStrokes(play, selected.id))
-                setSelectedStrokeId(null)
-                stopPlayback()
-              }}
-            >
-              Erase
-            </button>
           </div>
         ) : null}
         {selected && play.strokes.some((stroke) => stroke.playerId === selected.id) ? (
@@ -729,7 +729,7 @@ export function App() {
           </div>
         ) : null}
         <nav class="toolbar" aria-label="Tools">
-          <button type="button" class="tool" {...tip('Open your plays')} onClick={() => { setRedrawPlayerId(null); setSheet('book') }}>
+          <button type="button" class="tool" data-tour="plays" {...tip('Open your plays')} onClick={() => { setRedrawPlayerId(null); setSheet('book') }}>
             <BookIcon />
             Plays
           </button>
@@ -737,7 +737,7 @@ export function App() {
             <MoveIcon />
             Move
           </button>
-          <button type="button" class="tool" aria-pressed={tool === 'draw'} {...tip('Draw a path')} onClick={() => chooseTool('draw')}>
+          <button type="button" class="tool" data-tour="draw" aria-pressed={tool === 'draw'} {...tip('Draw a path')} onClick={() => chooseTool('draw')}>
             <DrawIcon />
             Draw
           </button>
@@ -815,10 +815,11 @@ export function App() {
           }}
           onLoadFile={() => fileRef.current?.click()}
           onSignIn={() => openAccount('in')}
+          example={book.guest}
           onPlaybook={() => setSheet('playbook')}
           onNeedAccount={() => {
             setSheet(null)
-            setPromptDetail('A playbook uses plays saved to your account.')
+            setPromptDetail('Make a free account first. Then your plays save, and you can make a PDF.')
             setSavePrompt(true)
           }}
           onClose={() => setSheet(null)}
@@ -838,11 +839,22 @@ export function App() {
           play={play}
           onChange={(next) => {
             stopPlayback()
-            if (next.format !== play.format || next.formationId !== play.formationId) {
+            const lineupChanged = next.format !== play.format || next.formationId !== play.formationId
+            if (lineupChanged) {
               setSelectedPlayerId(null)
               setSelectedStrokeId(null)
             }
-            book.update(next)
+            const renamed =
+              lineupChanged && (isGeneratedName(play.name) || isGeneratedName(next.name)) && (next.name === play.name || isGeneratedName(next.name))
+                ? {
+                    ...next,
+                    name: numberedName(
+                      book.plays.filter((item) => item.id !== play.id).map((item) => item.name),
+                      formationById(next.format, next.formationId).name,
+                    ),
+                  }
+                : next
+            book.update(renamed)
           }}
           onClose={() => setSheet(null)}
         />
@@ -866,9 +878,7 @@ export function App() {
             setSheet(null)
           }}
           onRemove={(playerId) => {
-            stopPlayback()
-            book.update(removeRoute(play, playerId))
-            setSelectedStrokeId(null)
+            dropRoute(playerId)
           }}
           onFlip={() => applyBreak(breakSide === 'left' ? 'right' : 'left')}
           onClose={() => setSheet(null)}
@@ -937,6 +947,7 @@ export function App() {
           saved={book.saved}
           start={accountMode}
           phonePlays={book.plays.length}
+          onDeleted={afterAccountDeleted}
           onClose={() => setSheet(null)}
         />
       ) : null}
@@ -977,10 +988,13 @@ export function App() {
           onClose={() => setSavedOpen(false)}
         />
       ) : null}
+      <div class="file-clip">
       <input
         ref={fileRef}
         class="file"
         type="file"
+        tabindex={-1}
+        aria-hidden="true"
         accept="application/json,.json"
         onChange={(event) => {
           const file = (event.currentTarget as HTMLInputElement).files?.[0]
@@ -995,6 +1009,7 @@ export function App() {
           ;(event.currentTarget as HTMLInputElement).value = ''
         }}
       />
+      </div>
       {book.toast ? <Toast message={book.toast} undo={book.toastUndo} /> : null}
       {tourOn && !showWelcome ? <CoachTour onDone={finishTour} /> : null}
       <TipHost />

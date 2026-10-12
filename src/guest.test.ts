@@ -5,6 +5,7 @@ import {
   isGuest,
   saveNeedsAccount,
   shouldShowWelcome,
+  showWelcomeAgain,
   welcomeDismissed,
 } from './guest'
 
@@ -18,6 +19,9 @@ describe('guest welcome', () => {
         setItem: (key: string, value: string) => {
           store.set(key, value)
         },
+        removeItem: (key: string) => {
+          store.delete(key)
+        },
         clear: () => store.clear(),
       },
     })
@@ -30,6 +34,9 @@ describe('guest welcome', () => {
     dismissWelcome()
     expect(welcomeDismissed()).toBe(true)
     expect(shouldShowWelcome(false, true)).toBe(false)
+    showWelcomeAgain()
+    expect(welcomeDismissed()).toBe(false)
+    expect(shouldShowWelcome(false, false)).toBe(true)
   })
 
   it('keeps a phone that already has plays out of guest mode', () => {

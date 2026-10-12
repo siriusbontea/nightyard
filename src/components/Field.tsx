@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'preact/hooks'
 import { applyPositions, fieldMarkup } from '../fieldMarkup'
 import { DRAW_PIXELS, FIELD_WIDTH, clamp, dist, moveStrokePoint, plantedMarker, setStrokeCurve, simplifyPath, viewSize, type Camera } from '../geometry'
-import { clientToField, hitTest } from '../hit'
+import { clientToField, hitTest, playerHitYards } from '../hit'
 import { playerAtTime } from '../playback'
 import { replaceMainStroke, replaceStroke, setStroke, translatePlayer } from '../play'
 import { NIGHT } from '../theme'
@@ -142,7 +142,7 @@ export function Field(props: FieldProps) {
         point,
         {
           handle: Math.max(1.15, yardsFor(22)),
-          player: Math.max(1.55, yardsFor(28)),
+          player: playerHitYards(yardsFor),
           stroke: Math.max(1.05, yardsFor(18)),
         },
         {

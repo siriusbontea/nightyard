@@ -2,6 +2,13 @@ import { displayStroke, dist, distanceToStroke, plantedMarker } from './geometry
 import { isPlayerShown } from './play'
 import type { Play, Point } from './types'
 
+/** Invisible tap size for a player mark. The drawn mark stays smaller. */
+export const PLAYER_HIT_PX = 44
+
+export function playerHitYards(yardsForPx: (px: number) => number): number {
+  return Math.max(1.55, yardsForPx(PLAYER_HIT_PX))
+}
+
 export type Hit =
   | { type: 'handle'; kind: 'point' | 'curve' | 'bend'; strokeId: string; index: number }
   | { type: 'player'; id: string }

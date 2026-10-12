@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { commit, createHistory, redo, undo, canRedo, canUndo, type History } from './history'
-import { isGuest } from './guest'
+import { isGuest, showWelcomeAgain } from './guest'
 import { sameJson } from './jsonEqual'
+import { formationById } from './formations'
+import { numberedName } from './playNames'
 import { createPlay, duplicatePlay, emptyBookStarters, parseBundle, renamePlay, resetPlay, sanitizePlay } from './play'
 import { adoptOwnerBook, copyName, emptyPlaybook, movePlay, playsInBook, renamePlaybook } from './playbooks'
-import { deletePlay, deletePlaybookRecord, loadPlaybook, saveCurrentBookId, savePlay, savePlaybookName, savePlaybookRecord } from './storage'
+import { clearLocalBook, deletePlay, deletePlaybookRecord, loadPlaybook, saveCurrentBookId, savePlay, savePlaybookName, savePlaybookRecord } from './storage'
 import {
   bootSync,
   currentUsername,
@@ -18,7 +20,7 @@ import {
   subscribeSync,
   type SyncState,
 } from './sync'
-import { loadTombstones } from './tombstones'
+import { clearTombstones, loadTombstones } from './tombstones'
 import type { FormatId, Play, Playbook } from './types'
 
 const AUTOSAVE_TIP = 'night-yard-autosave-tip'
@@ -51,12 +53,12 @@ function replacePlay(list: Play[], play: Play): Play[] {
   return next
 }
 
-function nextName(plays: Play[]): string {
-  const names = new Set(plays.map((play) => play.name))
-  if (!names.has('New play')) return 'New play'
-  let n = 2
-  while (names.has(`New play ${n}`)) n += 1
-  return `New play ${n}`
+function freshPlayName(format: FormatId, plays: Play[]): string {
+  const formationId = format === '11v11' ? 'shotgun-trips' : formationById(format, '').id
+  return numberedName(
+    plays.map((play) => play.name),
+    formationById(format, formationId).name,
+  )
 }
 
 export function usePlaybook() {
@@ -402,7 +404,7 @@ export function usePlaybook() {
     const created = createPlay({
       format,
       formationId: format === '11v11' ? 'shotgun-trips' : undefined,
-      name: nextName(visiblePlays(playsRef.current, bookId)),
+      name: freshPlayName(format, visiblePlays(playsRef.current, bookId)),
     })
     created.bookId = bookId
     let failed = false
@@ -541,7 +543,7 @@ export function usePlaybook() {
   async function createBook() {
     if (guestRef.current) return false
     const book = emptyPlaybook('New playbook')
-    const starter = createPlay({ format: '11v11', formationId: 'shotgun-trips', name: 'New play' })
+    const starter = createPlay({ format: '11v11', formationId: 'shotgun-trips', name: numberedName([], 'Shotgun Trips') })
     starter.bookId = book.id
     try {
       if (keepsLocal()) {
@@ -574,7 +576,7 @@ export function usePlaybook() {
       return { ...copy, name: play.name, bookId: book.id }
     })
     if (copies.length === 0) {
-      const starter = createPlay({ format: '11v11', formationId: 'shotgun-trips', name: 'New play' })
+      const starter = createPlay({ format: '11v11', formationId: 'shotgun-trips', name: numberedName([], 'Shotgun Trips') })
       copies = [{ ...starter, bookId: book.id }]
     }
     try {
@@ -747,6 +749,41 @@ export function usePlaybook() {
     return 'ok'
   }
 
+  async function forgetAccount() {
+    try {
+      await clearLocalBook()
+    } catch {
+      /* The phone copy can already be gone. The screen still returns to a guest book. */
+    }
+    clearTombstones()
+    showWelcomeAgain()
+    const fresh = emptyPlaybook('Night Yard')
+    const starters = emptyBookStarters()
+    for (const play of starters.plays) play.bookId = fresh.id
+    const seeded = starters.plays.sort((a, b) => b.updatedAt - a.updatedAt)
+    playsRef.current = seeded
+    booksRef.current = [fresh]
+    currentIdRef.current = fresh.id
+    mirrorIdRef.current = fresh.id
+    accountNameRef.current = fresh.name
+    bookNamedAtRef.current = 0
+    guestRef.current = true
+    memoryOnlyRef.current = false
+    const opened = createHistory(starters.seed)
+    historyRef.current = opened
+    savedPlay.current = null
+    deletedRef.current = null
+    setPlays(seeded)
+    setBooks([fresh])
+    setCurrentId(fresh.id)
+    setBookName(fresh.name)
+    setHistory(opened)
+    setGuest(true)
+    setMemoryOnly(false)
+    setSaved(false)
+    setFreshSeed({ id: starters.seed.id, updatedAt: starters.seed.updatedAt })
+  }
+
   function reset() {
     const current = historyRef.current
     if (!current) return
@@ -814,5 +851,6 @@ export function usePlaybook() {
     openSaved,
     undo: doUndo,
     redo: doRedo,
+    forgetAccount,
   }
 }

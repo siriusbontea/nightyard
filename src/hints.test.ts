@@ -11,12 +11,12 @@ describe('field hints', () => {
     expect(fieldHint({ ...base, pathsOpen: true })).toBe('Pick a player, then pick a path.')
   })
 
-  it('uses defender words on defense and account words for a guest', () => {
+  it('uses defender words on defense, and does not repeat the save chip for a guest', () => {
     expect(fieldHint({ ...base, defense: true })).toBe('Drag a defender to move. Tap one to change them.')
     expect(fieldHint({ ...base, defense: true, tool: 'draw' })).toBe('Pick a defender, then draw a job.')
     expect(fieldHint({ ...base, defense: true, pathsOpen: true })).toBe('Pick a defender, then pick a job.')
-    expect(fieldHint({ ...base, guest: true })).toBe('Drag a player to move. Make an account to save.')
-    expect(fieldHint({ ...base, guest: true, tool: 'draw' })).toBe('Draw a path. Make an account to save.')
+    expect(fieldHint({ ...base, guest: true })).toBe('Drag a player to move. Tap a player to change them.')
+    expect(fieldHint({ ...base, guest: true, tool: 'draw' })).toBe('Pick a player, then draw with your finger.')
     expect(fieldHint({ ...base, redraw: true, guest: true })).toBe('Draw a new path from here.')
   })
 
@@ -29,7 +29,7 @@ describe('field hints', () => {
       'Open your plays',
       'Pick a ready path',
       'Watch the play',
-      'Pick plays for a PDF',
+      'Make a PDF',
       'Pick every play here',
       'Add this play',
       'Take this play off',
@@ -47,8 +47,7 @@ describe('field hints', () => {
       'Copy to another playbook',
       'Move to another playbook',
       'Download this playbook',
-      'Load a playbook file',
-      'Keep one playbook',
+      'Load a file from this device',
     ]) {
       expect(text.split(/\s+/).length).toBeLessThanOrEqual(8)
       expect(tip(text)['aria-label']).toBe(text)

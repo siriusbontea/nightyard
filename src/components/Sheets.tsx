@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'preact/hooks'
+import { useEffect, useRef, useState } from 'preact/hooks'
 import type { ComponentChildren } from 'preact'
-import { formationById, formationsFor, shapeFor } from '../formations'
+import { formationBlurb, formationById, formationsFor, shapeFor } from '../formations'
 import { applyFormation, presetOnPlayer, setOurSide, setShowDefense } from '../play'
 import { applyPosition, positionSelected, positionsFor } from '../positions'
 import { assignmentsFor, plainPreset, presetLabel } from '../presets'
@@ -54,12 +54,18 @@ export function PlaySettings(props: { play: Play; onChange: (play: Play) => void
   const [name, setName] = useState(play.name)
   const [formation, setFormation] = useState(play.formation)
   const [notes, setNotes] = useState(play.notes)
+  const [pending, setPending] = useState<Play | null>(null)
 
   useEffect(() => {
     setName(play.name)
     setFormation(play.formation)
     setNotes(play.notes)
+    setPending(null)
   }, [play.id])
+
+  useEffect(() => {
+    setName(play.name)
+  }, [play.name])
 
   useEffect(() => {
     setFormation(play.formation)
@@ -72,6 +78,12 @@ export function PlaySettings(props: { play: Play; onChange: (play: Play) => void
       formation: formation.trim() || play.formation,
       notes,
     }
+  }
+
+  function request(next: Play) {
+    const lineupChanged = ourSideOf(next) !== ourSideOf(play) || next.format !== play.format || next.formationId !== play.formationId
+    if (lineupChanged && play.strokes.length > 0) setPending(next)
+    else props.onChange(next)
   }
 
   return (
@@ -100,7 +112,7 @@ export function PlaySettings(props: { play: Play; onChange: (play: Play) => void
           type="button"
           class="chip"
           aria-pressed={ourSideOf(play) === 'offense'}
-          onClick={() => props.onChange(setOurSide(edited(), 'offense'))}
+          onClick={() => request(setOurSide(edited(), 'offense'))}
         >
           Us
         </button>
@@ -108,12 +120,13 @@ export function PlaySettings(props: { play: Play; onChange: (play: Play) => void
           type="button"
           class="chip"
           aria-pressed={ourSideOf(play) === 'defense'}
-          onClick={() => props.onChange(setOurSide(edited(), 'defense'))}
+          onClick={() => request(setOurSide(edited(), 'defense'))}
         >
           Them
         </button>
       </div>
       <p class="fine">Orange is your team. Lime is the other team.</p>
+      <p class="warn">Changing who has the ball or the lineup clears the lines. Tap Undo to bring them back.</p>
       <p class="field-label">How many</p>
       <div class="chips">
         {FORMATS.map((format) => (
@@ -122,7 +135,10 @@ export function PlaySettings(props: { play: Play; onChange: (play: Play) => void
             type="button"
             class="chip stack-chip"
             aria-pressed={play.format === format.id}
-            onClick={() => props.onChange(applyFormation(edited(), format.id, play.formationId))}
+            onClick={() => {
+              if (play.format === format.id) return
+              request(applyFormation(edited(), format.id, play.formationId))
+            }}
           >
             <span>{formatShort(format.id)}</span>
             <small>{formatStyle(format.id)}</small>
@@ -130,39 +146,27 @@ export function PlaySettings(props: { play: Play; onChange: (play: Play) => void
         ))}
       </div>
       <p class="field-label">{ourSideOf(play) === 'defense' ? 'Their lineup' : 'Lineup'}</p>
-      <div class="chips">
-        {formationsFor(play.format)
-          .filter((template) => !template.special)
-          .map((template) => (
-            <button
-              key={template.id}
-              type="button"
-              class="chip"
-              aria-pressed={play.formationId === template.id}
-              onClick={() => props.onChange(applyFormation(edited(), play.format, template.id))}
-            >
-              {template.name}
-            </button>
-          ))}
-      </div>
+      <LineupChoices
+        format={play.format}
+        selectedId={play.formationId}
+        templates={formationsFor(play.format).filter((template) => !template.special)}
+        onPick={(id) => {
+          if (id === play.formationId) return
+          request(applyFormation(edited(), play.format, id))
+        }}
+      />
       {play.format === '11v11' ? (
         <>
           <p class="field-label">Kicking</p>
-          <div class="chips">
-            {formationsFor(play.format)
-              .filter((template) => template.special)
-              .map((template) => (
-                <button
-                  key={template.id}
-                  type="button"
-                  class="chip"
-                  aria-pressed={play.formationId === template.id}
-                  onClick={() => props.onChange(applyFormation(edited(), play.format, template.id))}
-                >
-                  {template.name}
-                </button>
-              ))}
-          </div>
+          <LineupChoices
+            format={play.format}
+            selectedId={play.formationId}
+            templates={formationsFor(play.format).filter((template) => template.special)}
+            onPick={(id) => {
+              if (id === play.formationId) return
+              request(applyFormation(edited(), play.format, id))
+            }}
+          />
         </>
       ) : (
         <p class="fine">Flag does not use kicking.</p>
@@ -181,7 +185,7 @@ export function PlaySettings(props: { play: Play; onChange: (play: Play) => void
           </button>
         ))}
       </div>
-      <p class="field-label">Start line</p>
+      <p class="field-label">Where the play starts</p>
       <div class="chips">
         {[5, 10, 15, 20, 25, 30, 40, 50].map((los) => (
           <button
@@ -204,8 +208,44 @@ export function PlaySettings(props: { play: Play; onChange: (play: Play) => void
           onInput={(event) => setNotes((event.currentTarget as HTMLTextAreaElement).value)}
         />
       </label>
-      <p class="fine">Changing who has the ball, or the lineup, erases the lines. Undo brings them back.</p>
+      {pending ? (
+        <ConfirmDialog
+          title="Clear the lines?"
+          body="Changing who has the ball or the lineup clears the lines. Tap Undo later if you want them back."
+          confirmLabel="Change it"
+          onCancel={() => setPending(null)}
+          onConfirm={() => {
+            const next = pending
+            setPending(null)
+            if (next) props.onChange(next)
+          }}
+        />
+      ) : null}
     </Sheet>
+  )
+}
+
+function LineupChoices(props: {
+  format: FormatId
+  selectedId: string
+  templates: { id: string; name: string }[]
+  onPick: (id: string) => void
+}) {
+  return (
+    <div class="lineup-grid">
+      {props.templates.map((template) => (
+        <button
+          key={template.id}
+          type="button"
+          class="lineup-pick"
+          aria-pressed={props.selectedId === template.id}
+          onClick={() => props.onPick(template.id)}
+        >
+          <span>{template.name}</span>
+          <small>{formationBlurb(props.format, template.id)}</small>
+        </button>
+      ))}
+    </div>
   )
 }
 
@@ -410,7 +450,7 @@ export function PlayerSheet(props: {
       <div class="stack">
         {strokes.map((stroke) => (
           <button key={stroke.id} type="button" class="row-btn" onClick={() => props.onDeleteStroke(stroke.id)}>
-            Erase {stroke.preset ? presetLabel(stroke.preset) : stroke.kind === 'motion' ? 'Walk' : stroke.kind === 'block' ? 'Block' : stroke.kind === 'run' ? 'Run' : 'Line'}
+            Remove {stroke.preset ? presetLabel(stroke.preset) : stroke.kind === 'motion' ? 'the walk' : stroke.kind === 'block' ? 'the block' : stroke.kind === 'run' ? 'the run' : 'route'}
           </button>
         ))}
       </div>
@@ -430,6 +470,7 @@ export function MoreSheet(props: {
   onClose: () => void
 }) {
   const [askReset, setAskReset] = useState(false)
+  const [askDelete, setAskDelete] = useState(false)
   if (askReset) {
     return (
       <Sheet title="Reset?" onClose={() => setAskReset(false)}>
@@ -470,14 +511,28 @@ export function MoreSheet(props: {
       </button>
       <button type="button" class="row-btn" onClick={props.onExport}>
         Download pictures
+        <small>A picture of this play to print or share</small>
       </button>
       <button type="button" class="row-btn" onClick={props.onDuplicate}>
         Copy this play
       </button>
-      <button type="button" class="row-btn danger" onClick={props.onDelete}>
-        Erase this play
+      <button type="button" class="row-btn danger" onClick={() => setAskDelete(true)}>
+        Delete play
+        <small>Takes this play out of the playbook</small>
       </button>
-      <p class="fine">A free account saves plays on every device. Plays already on this phone stay here. If you erase one, tap Undo.</p>
+      <p class="fine">A free account saves plays on every device. Plays already on this phone stay here. If you delete one, tap Undo.</p>
+      {askDelete ? (
+        <ConfirmDialog
+          title="Delete this play?"
+          body="This takes the play out of your playbook. You can tap Undo to bring it back."
+          confirmLabel="Delete"
+          onCancel={() => setAskDelete(false)}
+          onConfirm={() => {
+            setAskDelete(false)
+            props.onDelete()
+          }}
+        />
+      ) : null}
     </Sheet>
   )
 }
@@ -516,6 +571,48 @@ export function ExportSheet(props: {
       </button>
       <p class="fine">Pictures and playbooks are letter size. The cover has the team dog. White is for printing. Color looks like the field. Play files are in Plays.</p>
     </Sheet>
+  )
+}
+
+export function ConfirmDialog(props: {
+  title: string
+  body: string
+  confirmLabel: string
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  const cancelRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    cancelRef.current?.focus()
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      props.onCancel()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [props.onCancel])
+
+  return (
+    <div class="scrim confirm-scrim" onClick={props.onCancel}>
+      <div
+        class="confirm-card"
+        role="dialog"
+        aria-modal="true"
+        aria-label={props.title}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <h2>{props.title}</h2>
+        <p>{props.body}</p>
+        <button ref={cancelRef} type="button" class="primary wide" onClick={props.onCancel}>
+          Cancel
+        </button>
+        <button type="button" class="primary wide danger" onClick={props.onConfirm}>
+          {props.confirmLabel}
+        </button>
+      </div>
+    </div>
   )
 }
 

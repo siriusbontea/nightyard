@@ -2,7 +2,7 @@ import 'fake-indexeddb/auto'
 import { IDBFactory } from 'fake-indexeddb'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createPlay, parseBundle, serializePlaybook } from './play'
-import { deletePlay, loadPlaybook, resetStorageForTests, savePlay, savePlaybookName } from './storage'
+import { clearLocalBook, deletePlay, loadPlaybook, resetStorageForTests, savePlay, savePlaybookName } from './storage'
 
 describe('playbook save and load', () => {
   beforeEach(async () => {
@@ -41,6 +41,17 @@ describe('playbook save and load', () => {
     expect(after.plays.map((play) => play.id)).toEqual([first.plays[0].id])
     expect(after.name).toBe('Friday night')
     expect(after.namedAt).toBe(0)
+  })
+
+  it('clears a synced book so the next open is a guest starter', async () => {
+    const first = await loadPlaybook()
+    await savePlay(first.plays[0])
+    await savePlaybookName('Friday night')
+    await clearLocalBook()
+    const wiped = await loadPlaybook()
+    expect(wiped.legacy).toBe(false)
+    expect(wiped.plays.map((play) => play.name).sort()).toEqual(['Corndog', 'Stick'])
+    expect(wiped.freshSeed).not.toBeNull()
   })
 
   it('remembers when the playbook was named', async () => {

@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from 'preact/hooks'
-import { changePassword, signIn, signOut, signUp } from '../account'
+import { changePassword, deleteAccount, signIn, signOut, signUp } from '../account'
 import { messageFor } from '../accountErrors'
 import { getSyncState, statusLine, subscribeSync } from '../sync'
 import { Sheet } from './Sheets'
@@ -11,6 +11,7 @@ export function AccountSheet(props: {
   saved: boolean
   start?: Mode
   phonePlays?: number
+  onDeleted: () => void | Promise<void>
 }) {
   const [mode, setMode] = useState<Mode>(props.start ?? 'in')
   const [username, setUsername] = useState('')
@@ -20,6 +21,8 @@ export function AccountSheet(props: {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [account, setAccount] = useState(getSyncState())
+  const [deleting, setDeleting] = useState(false)
+  const [typed, setTyped] = useState('')
 
   useEffect(() => subscribeSync(setAccount), [])
 
@@ -55,6 +58,51 @@ export function AccountSheet(props: {
     }
   }
 
+  async function removeAccount() {
+    setBusy(true)
+    setError('')
+    try {
+      await deleteAccount()
+      await props.onDeleted()
+    } catch {
+      setError('Could not delete the account. Try again.')
+      setBusy(false)
+    }
+  }
+
+  if (account.signedIn && deleting) {
+    const ready = typed.trim() === account.username
+    return (
+      <Sheet title="Delete account" onClose={() => { setDeleting(false); setTyped(''); setError('') }}>
+        <p class="fine">This deletes your account and every play and playbook. They are gone forever.</p>
+        <label class="field-label">
+          Type {account.username}
+          <input
+            value={typed}
+            aria-label="Type your username"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellcheck={false}
+            onInput={(event) => setTyped((event.currentTarget as HTMLInputElement).value)}
+          />
+        </label>
+        {error ? (
+          <p class="form-error" role="alert">
+            {error}
+          </p>
+        ) : (
+          <p class="fine">Type your username, then tap Delete account.</p>
+        )}
+        <button type="button" class="primary wide" onClick={() => { setDeleting(false); setTyped(''); setError('') }}>
+          Cancel
+        </button>
+        <button type="button" class="primary wide danger" disabled={!ready || busy} onClick={() => void removeAccount()}>
+          {busy ? 'One moment…' : 'Delete account'}
+        </button>
+      </Sheet>
+    )
+  }
+
   if (account.signedIn && mode !== 'password') {
     return (
       <Sheet title="Your account" onClose={props.onClose}>
@@ -76,6 +124,9 @@ export function AccountSheet(props: {
           Sign out
         </button>
         <p class="fine">Signing out keeps your plays on this phone.</p>
+        <button type="button" class="primary wide danger" onClick={() => { setError(''); setTyped(''); setDeleting(true) }}>
+          Delete account
+        </button>
       </Sheet>
     )
   }

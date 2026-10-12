@@ -3,9 +3,8 @@ import { PLAY_CATEGORIES, categoriesFor, categoryOf, groupPlays, type PlayCatego
 import { filterSavedPlays, playThumb, showsSavedSearch } from '../savedPlays'
 import type { Play, Playbook } from '../types'
 import { formatShort } from '../types'
-import { tip } from '../hints'
 import { PlayChoiceMenu, PlaybookSwitcher } from './PlaybookSwitcher'
-import { Sheet } from './Sheets'
+import { ConfirmDialog, Sheet } from './Sheets'
 
 function age(timestamp: number): string {
   const seconds = Math.round((Date.now() - timestamp) / 1000)
@@ -49,6 +48,7 @@ export function PlaysSheet(props: {
   onPlaybook: () => void
   onNeedAccount: () => void
   onClose: () => void
+  example?: boolean
 }) {
   const [filter, setFilter] = useState<PlayCategory | 'All'>('All')
   const [query, setQuery] = useState('')
@@ -56,6 +56,7 @@ export function PlaysSheet(props: {
   const [draft, setDraft] = useState(props.current.name)
   const [dest, setDest] = useState<'copy' | 'move' | null>(null)
   const [menu, setMenu] = useState<{ id: string; top: number; left: number; mode: 'root' | 'copy' | 'move' } | null>(null)
+  const [askDelete, setAskDelete] = useState<string | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -100,10 +101,10 @@ export function PlaysSheet(props: {
       <button
         type="button"
         class="primary wide ghost"
-        {...tip(props.signedIn ? 'Pick plays for a PDF' : 'Make a free account')}
+        aria-label={props.signedIn ? 'Make a PDF' : 'Make a PDF (needs free account)'}
         onClick={props.signedIn ? props.onPlaybook : props.onNeedAccount}
       >
-        Make a playbook
+        {props.signedIn ? 'Make a PDF' : 'Make a PDF (needs free account)'}
       </button>
       <section class="current-play">
         <p class="field-label">This play</p>
@@ -145,7 +146,7 @@ export function PlaysSheet(props: {
           <button type="button" class="text-btn" onClick={() => props.onDuplicate(props.current.id)}>
             Copy
           </button>
-          <button type="button" class="text-btn danger" onClick={() => props.onDelete(props.current.id)}>
+          <button type="button" class="text-btn danger" onClick={() => setAskDelete(props.current.id)}>
             Delete
           </button>
         </div>
@@ -174,11 +175,11 @@ export function PlaysSheet(props: {
             </button>
           </div>
         ) : (
-          <div class="row-actions wrap">
-            <button type="button" class="text-btn" data-tip="Copy to another playbook" onClick={() => setDest('copy')}>
+          <div class="stack">
+            <button type="button" class="primary wide ghost" aria-label="Copy to another playbook" onClick={() => setDest('copy')}>
               Copy to another playbook
             </button>
-            <button type="button" class="text-btn" data-tip="Move to another playbook" onClick={() => setDest('move')}>
+            <button type="button" class="text-btn" aria-label="Move to another playbook" onClick={() => setDest('move')}>
               Move to another playbook
             </button>
           </div>
@@ -199,8 +200,9 @@ export function PlaysSheet(props: {
         </div>
       </section>
       <section>
-        <p class="backup-label">Your saved plays</p>
-        {props.signedIn ? null : <p class="fine">Sign in to open these on any device.</p>}
+        <p class="backup-label">{props.example ? 'Example plays' : 'Your saved plays'}</p>
+        {props.example ? <p class="fine">Try these. They are not saved yet.</p> : null}
+        {!props.example && !props.signedIn ? <p class="fine">Sign in to open these on any device.</p> : null}
         {offline ? <p class="fine">Offline — showing plays on this phone</p> : null}
         <div class="filter-row">
           <button type="button" class="chip" aria-pressed={filter === 'All'} onClick={() => setFilter('All')}>
@@ -265,6 +267,12 @@ export function PlaysSheet(props: {
           </div>
         ))}
       </section>
+      {props.example ? (
+        <section>
+          <p class="backup-label">Your saved plays</p>
+          <p class="fine">Make a free account to save plays</p>
+        </section>
+      ) : null}
       <section>
         <p class="backup-label">Backup files</p>
         <button type="button" class="primary wide ghost" onClick={props.onDownloadPlay}>
@@ -273,10 +281,10 @@ export function PlaysSheet(props: {
         <button type="button" class="primary wide ghost" data-tip="Download this playbook" onClick={props.onDownloadAll}>
           Download this playbook (file)
         </button>
-        <button type="button" class="primary wide ghost" data-tip="Load a playbook file" onClick={props.onLoadFile}>
-          Load a playbook from a file
+        <button type="button" class="primary wide ghost" aria-label="Load a file from this device" onClick={props.onLoadFile}>
+          Load a file from this device
         </button>
-        <p class="fine">Your plays already save to your account. These make a file on this phone.</p>
+        <p class="fine">Your plays already save to your account. A backup file is a copy you can keep or share.</p>
       </section>
       {menu ? (
         <div class="row-menu wide" ref={menuRef} style={{ top: `${menu.top}px`, left: `${menu.left}px` }}>
@@ -299,7 +307,7 @@ export function PlaysSheet(props: {
             onDelete={() => {
               const id = menu.id
               setMenu(null)
-              props.onDelete(id)
+              setAskDelete(id)
             }}
             onPick={(bookId) => {
               const id = menu.id
@@ -314,6 +322,19 @@ export function PlaysSheet(props: {
             }}
           />
         </div>
+      ) : null}
+      {askDelete ? (
+        <ConfirmDialog
+          title="Delete this play?"
+          body="This takes the play out of your playbook. You can tap Undo to bring it back."
+          confirmLabel="Delete"
+          onCancel={() => setAskDelete(null)}
+          onConfirm={() => {
+            const id = askDelete
+            setAskDelete(null)
+            if (id) props.onDelete(id)
+          }}
+        />
       ) : null}
     </Sheet>
   )

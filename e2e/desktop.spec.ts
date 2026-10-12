@@ -6,10 +6,14 @@ test('desktop sidebar searches, filters, and moves with the keyboard', async ({ 
   await tryFirst(page)
 
   await expect(page.locator('.desk-book')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Choose File' })).toHaveCount(0)
+  await expect(page.locator('.top')).not.toContainText('Choose File')
+  await expect(page.getByText('Example plays')).toBeVisible()
+  await expect(page.getByText('Make a free account to save plays')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Move a player' })).toHaveAttribute('aria-pressed', 'true')
   await page.getByRole('button', { name: 'Draw a path' }).click()
   await page.getByRole('button', { name: 'Pick a ready path' }).click()
-  await page.getByRole('button', { name: 'Close' }).click()
+  await page.getByRole('button', { name: 'Close', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Draw a path' })).toHaveAttribute('aria-pressed', 'true')
 
   const search = page.locator('.desk-book').getByRole('textbox', { name: 'Find a play' })
@@ -26,7 +30,7 @@ test('desktop sidebar searches, filters, and moves with the keyboard', async ({ 
 
   const title = page.locator('.stage .play-title')
   const before = (await title.evaluate((el) => el.textContent ?? '')).trim()
-  await page.getByLabel('Saved plays').focus()
+  await page.getByLabel('Example plays').focus()
   await page.keyboard.press('ArrowDown')
   await expect.poll(async () => (await title.evaluate((el) => el.textContent ?? '')).trim()).not.toBe(before)
   const after = (await title.evaluate((el) => el.textContent ?? '')).trim()

@@ -146,6 +146,16 @@ export async function savePlaybookRecord(book: Playbook): Promise<void> {
   await transactionDone(tx)
 }
 
+/** Drops the phone copy of a deleted account so the next open is a guest book. */
+export async function clearLocalBook(): Promise<void> {
+  const db = await openDb()
+  const tx = db.transaction(['plays', 'playbooks', 'meta'], 'readwrite')
+  tx.objectStore('plays').clear()
+  tx.objectStore('playbooks').clear()
+  tx.objectStore('meta').clear()
+  await transactionDone(tx)
+}
+
 export async function deletePlaybookRecord(id: string): Promise<void> {
   const db = await openDb()
   const tx = db.transaction('playbooks', 'readwrite')

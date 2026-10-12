@@ -51,3 +51,9 @@ export function loadBookTombstones(): { id: string; updatedAt: number }[] {
 export function saveBookTombstones(items: { id: string; updatedAt: number }[]) {
   storage()?.setItem(BOOK_KEY, JSON.stringify(items))
 }
+
+export function clearTombstones(): void {
+  const box = storage()
+  box?.removeItem(KEY)
+  box?.removeItem(BOOK_KEY)
+}

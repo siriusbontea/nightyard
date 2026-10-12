@@ -27,6 +27,14 @@ export function signOut() {
   pb.authStore.clear()
 }
 
+/** Deletes this login. The server drops that person's plays and playbooks with it. */
+export async function deleteAccount(): Promise<void> {
+  const id = pb.authStore.record?.id
+  if (!id) throw new Error('Sign in first.')
+  await pb.collection('users').delete(id)
+  pb.authStore.clear()
+}
+
 export async function changePassword(oldPassword: string, password: string, passwordConfirm: string) {
   if (!oldPassword) throw new Error('Type your old password')
   const passError = checkPassword(password)

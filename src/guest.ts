@@ -20,6 +20,15 @@ export function dismissWelcome(): void {
   }
 }
 
+/** After an account is deleted, the next open is a guest welcome again. */
+export function showWelcomeAgain(): void {
+  try {
+    globalThis.localStorage?.removeItem(WELCOME_KEY)
+  } catch {
+    /* Ignore. */
+  }
+}
+
 /** Plays already stored on this phone, including a book that was emptied on purpose. */
 export function hasLegacyBook(playCount: number, seeded: boolean): boolean {
   return seeded || playCount > 0

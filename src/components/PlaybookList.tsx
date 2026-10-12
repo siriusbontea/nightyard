@@ -32,6 +32,7 @@ export function PlaybookList(props: {
   saveStatus?: string
   saveKind?: string
   onSaveStatus?: () => void
+  example?: boolean
 }) {
   const [renaming, setRenaming] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
@@ -132,7 +133,11 @@ export function PlaybookList(props: {
           </select>
         </label>
       </div>
-      <div class="book-scroll" ref={listRef} tabIndex={0} aria-label="Saved plays" onKeyDown={onListKey}>
+      {props.example ? (
+        <p class="fine">Make a free account to save plays</p>
+      ) : null}
+      <div class="book-scroll" ref={listRef} tabIndex={0} aria-label={props.example ? 'Example plays' : 'Saved plays'} onKeyDown={onListKey}>
+        {props.example ? <p class="backup-label">Example plays</p> : null}
         {props.plays.length === 0 ? (
           <p class="empty-copy">No plays yet. Tap New play.</p>
         ) : groups.length === 0 ? (

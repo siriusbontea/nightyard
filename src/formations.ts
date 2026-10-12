@@ -494,6 +494,37 @@ export function formationById(format: FormatId, id: string): FormationTemplate {
   return list.find((formation) => formation.id === id) ?? list[0]
 }
 
+const BLURBS: Record<string, string> = {
+  '5v5:doubles': 'Two receivers on the left. One on the right.',
+  '5v5:trips-right': 'Three receivers lined up on the right.',
+  '5v5:spread': 'Receivers spread wide on both sides.',
+  '6v6:doubles': 'Receivers on both sides, with a back behind the quarterback.',
+  '6v6:trips-right': 'Three receivers on the right, and a back behind the quarterback.',
+  '6v6:spread': 'Receivers spread wide, with a back in the middle.',
+  '6v6:wing': 'One player lines up tight, like a wing, next to the line.',
+  '7v7:spread': 'Receivers spread wide on both sides.',
+  '7v7:pro': 'A tight end on one side and a back behind the quarterback.',
+  '8v8:spread': 'Receivers spread wide, with two backs behind the quarterback.',
+  '8v8:pro': 'A tight end, two receivers, and two backs.',
+  '9v9:spread': 'Receivers spread wide across the field.',
+  '9v9:pro': 'A tight end and two backs, like a small tackle lineup.',
+  '11v11:trips-bunch': 'Three receivers bunched together on one side.',
+  '11v11:shotgun-trips': 'Quarterback stands back. Three receivers on one side.',
+  '11v11:ace': 'Two receivers on each side. One back behind the quarterback.',
+  '11v11:i-form': 'Two backs lined up straight behind the quarterback.',
+  '11v11:kickoff': 'Your team kicks the ball to start.',
+  '11v11:kick-return': 'The other team kicks. You catch it and run.',
+  '11v11:punt': 'You kick the ball away on fourth down.',
+  '11v11:punt-return': 'They punt. You catch it and run.',
+  '11v11:field-goal': 'You try to kick the ball through the posts.',
+  '11v11:fg-block': 'They try a field goal. You try to block the kick.',
+}
+
+/** One short line a kid can read under the lineup name. */
+export function formationBlurb(format: FormatId, id: string): string {
+  return BLURBS[`${format}:${id}`] ?? 'Players line up for this look.'
+}
+
 export function playerFromSpot(spotDef: Spot, side: Side, mine: boolean, routeIndex: number): Player {
   return {
     id: uid(),

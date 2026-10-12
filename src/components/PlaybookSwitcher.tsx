@@ -101,21 +101,21 @@ export function PlaybookSwitcher(props: {
                 >
                   Copy
                 </button>
-                <button
-                  type="button"
-                  class="text-btn danger"
-                  disabled={last}
-                  data-tip={last ? 'Keep one playbook' : 'Delete this playbook'}
-                  aria-label={last ? 'Keep one playbook' : `Delete ${book.name}`}
-                  onClick={() => {
-                    if (last) return
-                    if (!window.confirm(deleteBookLabel(book.name, props.countIn(book.id)))) return
-                    setOpen(false)
-                    props.onDelete(book.id)
-                  }}
-                >
-                  Delete
-                </button>
+                {last ? null : (
+                  <button
+                    type="button"
+                    class="text-btn danger"
+                    data-tip="Delete this playbook"
+                    aria-label={`Delete ${book.name}`}
+                    onClick={() => {
+                      if (!window.confirm(deleteBookLabel(book.name, props.countIn(book.id)))) return
+                      setOpen(false)
+                      props.onDelete(book.id)
+                    }}
+                  >
+                    Delete
+                  </button>
+                )}
               </div>
             )
           })}
@@ -174,10 +174,10 @@ export function PlayChoiceMenu(props: {
       <button type="button" onClick={props.onDuplicate}>
         Copy
       </button>
-      <button type="button" data-tip="Copy to another playbook" onClick={() => props.onMode('copy')}>
+      <button type="button" aria-label="Copy to another playbook" onClick={() => props.onMode('copy')}>
         Copy to another playbook
       </button>
-      <button type="button" data-tip="Move to another playbook" onClick={() => props.onMode('move')}>
+      <button type="button" aria-label="Move to another playbook" onClick={() => props.onMode('move')}>
         Move to another playbook
       </button>
       <button type="button" class="danger" onClick={props.onDelete}>

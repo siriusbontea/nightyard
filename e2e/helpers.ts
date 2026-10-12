@@ -19,7 +19,7 @@ export async function tryFirst(page: Page) {
 }
 
 export async function signUp(page: Page, username: string, password: string) {
-  await page.locator('.guest-chip').click()
+  await page.locator('.save-chip.guest').click()
   const form = page.getByRole('dialog', { name: 'Make a free account' })
   await expect(form).toBeVisible()
   await form.getByLabel('Username').fill(username)
@@ -35,7 +35,7 @@ export async function openPlays(page: Page) {
 }
 
 export async function closeSheet(page: Page) {
-  await page.getByRole('button', { name: 'Close' }).click()
+  await page.getByRole('button', { name: 'Close', exact: true }).click()
 }
 
 export function accountUser(): string {

@@ -45,7 +45,7 @@ export function PlaybookSheet(props: {
   }
 
   return (
-    <Sheet title="Make a playbook" onClose={props.onClose}>
+    <Sheet title="Make a PDF" onClose={props.onClose}>
       <label class="field-label">
         Playbook name
         <input
@@ -139,11 +139,12 @@ export function PlaybookSheet(props: {
       <button
         type="button"
         class="primary wide"
-        data-tip="Save the playbook"
+        data-tip="Make a PDF"
+        aria-label="Make a PDF"
         disabled={props.busy || ordered.length === 0}
         onClick={make}
       >
-        {props.busy ? 'Making the PDF…' : 'Make PDF'}
+        {props.busy ? 'Making the PDF…' : 'Make a PDF'}
       </button>
     </Sheet>
   )
