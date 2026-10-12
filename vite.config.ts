@@ -13,7 +13,7 @@ export default defineConfig(({ command }) => {
           {
             name: 'ny-build-id',
             transformIndexHtml(html: string) {
-              return html.replaceAll('%VITE_BUILD_ID%', process.env.VITE_BUILD_ID ?? '')
+              return html.replaceAll('__NY_BUILD_ID__', process.env.VITE_BUILD_ID ?? '')
             },
           },
           preact(),
