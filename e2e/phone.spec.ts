@@ -76,6 +76,10 @@ test('try first shows the tour, then Corndog and Stick', async () => {
   await openPlays(page)
   const plays = page.getByRole('dialog', { name: 'Plays' })
   await expect(plays.getByRole('textbox', { name: 'Find a play' })).toHaveCount(0)
+  await expect(plays.locator('.save-chip')).toHaveCount(0)
+  await expect(plays.getByText('Not saved — make a free account')).toHaveCount(0)
+  await expect(plays.getByRole('button', { name: 'Make a PDF (needs free account)' })).toBeVisible()
+  await expect(plays.getByRole('button', { name: 'Sign in' })).toBeVisible()
   await expect(plays.getByText('Example plays')).toBeVisible()
   await expect(plays.getByText('Make a free account to save plays')).toBeVisible()
   await expect(plays.getByText('Your saved plays')).toBeVisible()
@@ -116,7 +120,8 @@ test('tools stay selected, routes change, and the play plays back', async () => 
   await page.getByRole('button', { name: 'Pick a ready path' }).click()
   const paths = page.getByRole('dialog', { name: 'Paths' })
   await paths.getByRole('button', { name: 'WR1', exact: true }).click()
-  await expect(paths.getByRole('button', { name: 'Block', exact: true })).toBeVisible()
+  await expect(paths.getByRole('button', { name: 'Block Stop them' })).toHaveCount(1)
+  await expect(paths.locator('.route-options').getByRole('button', { name: 'Block', exact: true })).toHaveCount(0)
   await expect(paths.getByRole('button', { name: 'Redraw' })).toBeVisible()
   await expect(paths.getByRole('button', { name: 'Remove route' })).toBeVisible()
   await expect(paths.getByRole('button', { name: 'Flip', exact: true })).toBeVisible()
@@ -404,6 +409,11 @@ test('playbooks can be created, renamed, copied, and plays can move', async () =
   await expect(confirmDelete.getByRole('button', { name: 'Cancel' })).toBeFocused()
   await confirmDelete.getByRole('button', { name: 'Delete' }).click()
   await expect(page.getByText('Deleted. Tap Undo.')).toBeVisible()
+  const toastBox = await page.locator('.toast').boundingBox()
+  const copyBox = await page.getByRole('button', { name: 'Copy to another playbook' }).boundingBox()
+  expect(toastBox).toBeTruthy()
+  expect(copyBox).toBeTruthy()
+  expect(overlaps(toastBox!, copyBox!)).toBe(false)
   await page.locator('.toast-undo').click()
   await expect(page.getByRole('dialog', { name: 'Plays' }).locator('.saved-open').filter({ hasText: doomed }).first()).toBeVisible()
   await closeSheet(page)
@@ -454,6 +464,13 @@ test('delete account removes the login and returns to the welcome', async () => 
   await signIn.getByRole('button', { name: 'Sign in' }).click()
   await expect(signIn.getByRole('alert')).toBeVisible()
 })
+
+function overlaps(
+  a: { x: number; y: number; width: number; height: number },
+  b: { x: number; y: number; width: number; height: number },
+) {
+  return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y
+}
 
 async function acceptClear(target: Page) {
   const ask = target.getByRole('dialog', { name: 'Clear the lines?' })

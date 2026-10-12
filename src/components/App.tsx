@@ -44,6 +44,8 @@ import { SavedPlaysSheet } from './SavedPlaysSheet'
 import { GuestSavePrompt, WelcomeCard } from './WelcomeCard'
 import { TipHost } from './TipHost'
 import { CoachTour } from './CoachTour'
+import { useAppUpdate } from '../useAppUpdate'
+import { UPDATE_READY } from '../updateGate'
 
 type Tool = 'move' | 'draw'
 type SheetId = null | 'book' | 'presets' | 'player' | 'more' | 'export' | 'play' | 'account' | 'playbook'
@@ -95,6 +97,10 @@ function openingCamera(los = DEFAULT_LOS) {
 
 export function App() {
   const book = usePlaybook()
+  const appUpdate = useAppUpdate()
+  function takeUpdate() {
+    void book.flushSave().finally(() => appUpdate.apply())
+  }
   const [tool, setTool] = useState<Tool>('move')
   const [redrawPlayerId, setRedrawPlayerId] = useState<string | null>(null)
   const [breakSide, setBreakSide] = useState<BreakSide>('right')
@@ -495,7 +501,8 @@ export function App() {
           }}
         />
         </div>
-        {book.toast ? <Toast message={book.toast} undo={book.toastUndo} /> : null}
+        {appUpdate.show ? <UpdateToast onApply={takeUpdate} /> : null}
+        {book.toast ? <Toast message={book.toast} undo={book.toastUndo} lifted={appUpdate.show} /> : null}
         <TipHost />
       </div>
     )
@@ -1005,7 +1012,8 @@ export function App() {
         }}
       />
       </div>
-      {book.toast ? <Toast message={book.toast} undo={book.toastUndo} /> : null}
+      {appUpdate.show ? <UpdateToast onApply={takeUpdate} /> : null}
+      {book.toast ? <Toast message={book.toast} undo={book.toastUndo} lifted={appUpdate.show} /> : null}
       {tourOn && !showWelcome ? <CoachTour onDone={finishTour} /> : null}
       <TipHost />
     </div>
@@ -1017,9 +1025,17 @@ function accountInitial(name: string | null): string {
   return /[a-z0-9]/i.test(letter) ? letter.toUpperCase() : ''
 }
 
-function Toast(props: { message: string; undo: (() => void) | null }) {
+function UpdateToast(props: { onApply: () => void }) {
   return (
-    <div class="toast" role="status">
+    <button type="button" class="toast" onClick={props.onApply}>
+      {UPDATE_READY}
+    </button>
+  )
+}
+
+function Toast(props: { message: string; undo: (() => void) | null; lifted?: boolean }) {
+  return (
+    <div class={props.lifted ? 'toast toast-next' : 'toast'} role="status">
       <span>{props.message}</span>
       {props.undo ? (
         <button type="button" class="toast-undo" onClick={props.undo}>

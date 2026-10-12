@@ -4,6 +4,7 @@ import { filterSavedPlays, playThumb, showsSavedSearch } from '../savedPlays'
 import type { Play, Playbook } from '../types'
 import { formatShort } from '../types'
 import { PlayChoiceMenu, PlaybookSwitcher } from './PlaybookSwitcher'
+import { setUnsavedWork } from '../updateGate'
 import { ConfirmDialog, Sheet } from './Sheets'
 
 function age(timestamp: number): string {
@@ -121,7 +122,10 @@ export function PlaysSheet(props: {
               aria-label={`Rename ${props.current.name}`}
               value={draft}
               maxLength={80}
-              onInput={(event) => setDraft((event.currentTarget as HTMLInputElement).value)}
+              onInput={(event) => {
+                setUnsavedWork(true)
+                setDraft((event.currentTarget as HTMLInputElement).value)
+              }}
             />
             <button type="submit" class="text-btn">
               Save
@@ -130,7 +134,7 @@ export function PlaysSheet(props: {
         ) : (
           <p class="play-name">{props.current.name}</p>
         )}
-        {props.saveStatus ? (
+        {props.saveStatus && props.saveKind !== 'guest' && !props.example ? (
           props.onSaveStatus ? (
             <button type="button" class={`save-chip ${props.saveKind}`} onClick={props.onSaveStatus}>
               {props.saveStatus}

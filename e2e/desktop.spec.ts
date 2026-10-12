@@ -39,6 +39,18 @@ test('desktop sidebar searches, filters, and moves with the keyboard', async ({ 
   await page.getByRole('button', { name: 'Change the lineup' }).hover()
   await expect(page.locator('.tip-pop')).toHaveText('Change the lineup')
 
+  await page.getByRole('button', { name: 'Open your plays' }).click()
+  await page.getByRole('dialog', { name: 'Plays' }).locator('.current-play').getByRole('button', { name: 'Delete' }).click()
+  const confirmDelete = page.getByRole('dialog', { name: 'Delete this play?' })
+  await confirmDelete.getByRole('button', { name: 'Delete' }).hover()
+  await page.waitForTimeout(500)
+  await expect(page.locator('.tip-pop')).toHaveCount(0)
+  await confirmDelete.getByRole('button', { name: 'Cancel' }).hover()
+  await page.waitForTimeout(500)
+  await expect(page.locator('.tip-pop')).toHaveCount(0)
+  await confirmDelete.getByRole('button', { name: 'Cancel' }).click()
+  await page.getByRole('button', { name: 'Close', exact: true }).click()
+
   const fit = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
     clientWidth: document.documentElement.clientWidth,

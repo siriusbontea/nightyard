@@ -1117,9 +1117,10 @@ textarea { min-height: 96px; resize: vertical; }
 .toast {
   position: fixed;
   left: 50%;
-  bottom: calc(12px + env(safe-area-inset-bottom));
+  top: calc(8px + env(safe-area-inset-top));
+  bottom: auto;
   transform: translateX(-50%);
-  z-index: 35;
+  z-index: 36;
   max-width: calc(100% - 24px);
   display: flex;
   align-items: center;
@@ -1131,6 +1132,8 @@ textarea { min-height: 96px; resize: vertical; }
   padding: 8px 8px 8px 14px;
   font-weight: 700;
 }
+.toast-next { top: calc(64px + env(safe-area-inset-top)); }
+button.toast { font-weight: 700; text-align: center; }
 .toast-undo {
   min-width: 64px;
   min-height: var(--tap);

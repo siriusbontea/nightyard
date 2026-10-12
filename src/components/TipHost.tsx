@@ -13,6 +13,15 @@ function tipTarget(node: EventTarget | null): HTMLElement | null {
   return el instanceof HTMLElement ? el : null
 }
 
+function confirmOpen(): boolean {
+  return document.querySelector('.confirm-scrim, .no-tip') !== null
+}
+
+function blocksTips(node: EventTarget | null): boolean {
+  if (confirmOpen()) return true
+  return node instanceof Element && Boolean(node.closest('.confirm-scrim, .confirm-card, .no-tip'))
+}
+
 function tipLabel(el: HTMLElement): string | null {
   if (el.dataset.tip) return el.dataset.tip
   const aria = el.getAttribute('aria-label')
@@ -44,6 +53,10 @@ export function TipHost() {
     }
 
     function place(el: HTMLElement) {
+      if (blocksTips(el)) {
+        setTip(null)
+        return
+      }
       const text = tipLabel(el)
       if (!text) {
         setTip(null)
@@ -57,6 +70,11 @@ export function TipHost() {
 
     function onOver(event: PointerEvent) {
       if (!mouseLike(event)) return
+      if (blocksTips(event.target)) {
+        window.clearTimeout(hoverTimer)
+        setTip(null)
+        return
+      }
       if (Date.now() - lastTouch < 700) return
       const el = tipTarget(event.target)
       window.clearTimeout(hoverTimer)
@@ -78,7 +96,7 @@ export function TipHost() {
       window.clearTimeout(pressTimer)
       window.clearTimeout(hideTimer)
       const el = tipTarget(event.target)
-      if (!el || el.closest('.tour-card')) return
+      if (!el || el.closest('.tour-card') || blocksTips(el)) return
       pressTimer = window.setTimeout(() => {
         place(el)
         suppressClick = true
@@ -102,6 +120,11 @@ export function TipHost() {
       suppressClick = false
     }
 
+    const observer = new MutationObserver(() => {
+      if (confirmOpen()) setTip(null)
+    })
+    observer.observe(document.body, { childList: true, subtree: true })
+
     document.addEventListener('pointerover', onOver)
     document.addEventListener('pointerout', onOut)
     document.addEventListener('pointerdown', onDown)
@@ -118,6 +141,7 @@ export function TipHost() {
       document.removeEventListener('pointerup', onUp)
       document.removeEventListener('pointercancel', onUp)
       document.removeEventListener('click', onClick, true)
+      observer.disconnect()
     }
   }, [])
 

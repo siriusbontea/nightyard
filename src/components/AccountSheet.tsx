@@ -73,7 +73,7 @@ export function AccountSheet(props: {
   if (account.signedIn && deleting) {
     const ready = typed.trim() === account.username
     return (
-      <Sheet title="Delete account" onClose={() => { setDeleting(false); setTyped(''); setError('') }}>
+      <Sheet title="Delete account" noTips onClose={() => { setDeleting(false); setTyped(''); setError('') }}>
         <p class="fine">This deletes your account and every play and playbook. They are gone forever.</p>
         <label class="field-label">
           Type {account.username}

@@ -8,11 +8,13 @@ import { categoriesFor, categoryOf } from '../categories'
 import type { BreakSide } from '../play'
 import type { Play, Player, PresetId } from '../types'
 import { FORMATS, formatShort, formatStyle, ourSideOf, type FormatId } from '../types'
+import { setUnsavedWork } from '../updateGate'
 import { PathPreview } from './PathPreview'
 
 export function Sheet(props: {
   title: string
   subtitle?: string
+  noTips?: boolean
   onClose: () => void
   children: ComponentChildren
 }) {
@@ -25,9 +27,9 @@ export function Sheet(props: {
   }, [props.onClose])
 
   return (
-    <div class="scrim" onClick={props.onClose}>
+    <div class={props.noTips ? 'scrim no-tip' : 'scrim'} onClick={props.onClose}>
       <div
-        class="sheet"
+        class={props.noTips ? 'sheet no-tip' : 'sheet'}
         role="dialog"
         aria-modal="true"
         aria-label={props.title}
@@ -96,14 +98,24 @@ export function PlaySettings(props: { play: Play; onChange: (play: Play) => void
     >
       <label class="field-label">
         Name
-        <input value={name} maxLength={80} onInput={(event) => setName((event.currentTarget as HTMLInputElement).value)} />
+        <input
+          value={name}
+          maxLength={80}
+          onInput={(event) => {
+            setUnsavedWork(true)
+            setName((event.currentTarget as HTMLInputElement).value)
+          }}
+        />
       </label>
       <label class="field-label">
         Lineup name
         <input
           value={formation}
           maxLength={40}
-          onInput={(event) => setFormation((event.currentTarget as HTMLInputElement).value)}
+          onInput={(event) => {
+            setUnsavedWork(true)
+            setFormation((event.currentTarget as HTMLInputElement).value)
+          }}
         />
       </label>
       <p class="field-label">Who has the ball?</p>
@@ -205,7 +217,10 @@ export function PlaySettings(props: { play: Play; onChange: (play: Play) => void
           rows={4}
           maxLength={600}
           value={notes}
-          onInput={(event) => setNotes((event.currentTarget as HTMLTextAreaElement).value)}
+          onInput={(event) => {
+            setUnsavedWork(true)
+            setNotes((event.currentTarget as HTMLTextAreaElement).value)
+          }}
         />
       </label>
       {pending ? (
@@ -300,11 +315,6 @@ export function PresetSheet(props: {
           </div>
           {hasLine ? (
             <div class="route-options">
-              {selected.side === 'defense' || props.play.format !== '11v11' ? null : (
-                <button type="button" onClick={() => props.onApply(selected.id, 'block')}>
-                  Block
-                </button>
-              )}
               <button type="button" onClick={() => props.onRedraw(selected.id)}>
                 Redraw
               </button>

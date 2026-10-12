@@ -21,6 +21,7 @@ import {
   type SyncState,
 } from './sync'
 import { clearTombstones, loadTombstones } from './tombstones'
+import { clearUnsavedIfCurrent, setUndoHold, setUnsavedWork, unsavedGeneration } from './updateGate'
 import type { FormatId, Play, Playbook } from './types'
 
 const AUTOSAVE_TIP = 'night-yard-autosave-tip'
@@ -104,6 +105,7 @@ export function usePlaybook() {
   function notify(message: string, undo?: () => void) {
     setToast(message)
     setToastUndo(() => undo ?? null)
+    setUndoHold(Boolean(undo))
   }
 
   function maybeAutosaveTip() {
@@ -125,6 +127,7 @@ export function usePlaybook() {
   }, [])
 
   function publish(next: History) {
+    setUnsavedWork(true)
     historyRef.current = next
     setHistory(next)
     setPlays(replacePlay(playsRef.current, next.present))
@@ -318,6 +321,7 @@ export function usePlaybook() {
     if (!ready || !play || memoryOnly || guest || guestRef.current) return
     if (savedPlay.current && samePlay(savedPlay.current, play)) {
       setSaved(true)
+      setUnsavedWork(false)
       return
     }
     if (!savedPlay.current) {
@@ -325,6 +329,7 @@ export function usePlaybook() {
       return
     }
     setSaved(false)
+    const seen = unsavedGeneration()
     const handle = window.setTimeout(() => {
       const current = historyRef.current?.present
       if (!current || !keepsLocal()) return
@@ -333,6 +338,7 @@ export function usePlaybook() {
         .then(() => {
           savedPlay.current = current
           setSaved(true)
+          clearUnsavedIfCurrent(seen)
           scheduleSync()
         })
         .catch(() => {
@@ -375,6 +381,7 @@ export function usePlaybook() {
   }, [account.signedIn, ready])
 
   useEffect(() => {
+    setUndoHold(Boolean(toast && toastUndo))
     if (!toast) return
     const handle = window.setTimeout(() => {
       setToast(null)
@@ -399,6 +406,7 @@ export function usePlaybook() {
   }
 
   async function create(format: FormatId = '11v11') {
+    if (!keepsLocal()) setUnsavedWork(true)
     const bookId = currentIdRef.current || booksRef.current[0]?.id
     if (!bookId) return
     const created = createPlay({
@@ -429,6 +437,7 @@ export function usePlaybook() {
     const renamed = renamePlay(found, name)
     if (historyRef.current?.present.id === id) update(renamed)
     else {
+      if (!keepsLocal()) setUnsavedWork(true)
       setPlays(replacePlay(playsRef.current, { ...renamed, updatedAt: Date.now() }))
       if (keepsLocal()) await savePlay({ ...renamed, updatedAt: Date.now() }).catch(() => setToast('Could not save on this phone.'))
     }
@@ -438,6 +447,7 @@ export function usePlaybook() {
     const found = playsRef.current.find((item) => item.id === id)
     if (!found) return
     const copy = duplicatePlay(found)
+    if (!keepsLocal()) setUnsavedWork(true)
     if (keepsLocal()) await savePlay(copy).catch(() => setToast('Could not save on this phone.'))
     setPlays([copy, ...playsRef.current])
     const next = createHistory(copy)
@@ -451,6 +461,7 @@ export function usePlaybook() {
     const index = playsRef.current.findIndex((item) => item.id === id)
     const found = index >= 0 ? playsRef.current[index] : undefined
     if (!found) return
+    if (!keepsLocal()) setUnsavedWork(true)
     deletedRef.current = { play: found, index }
     const remaining = playsRef.current.filter((item) => item.id !== id)
     playsRef.current = remaining
@@ -730,6 +741,7 @@ export function usePlaybook() {
       return 'ok'
     }
     const bookId = currentIdRef.current || booksRef.current[0]?.id || ''
+    if (!keepsLocal()) setUnsavedWork(true)
     const stamped = bundle.plays.map((play) => ({ ...play, bookId, updatedAt: Date.now() }))
     if (keepsLocal()) {
       for (const item of stamped) await savePlay(item)
@@ -773,6 +785,8 @@ export function usePlaybook() {
     historyRef.current = opened
     savedPlay.current = null
     deletedRef.current = null
+    setUnsavedWork(false)
+    setUndoHold(false)
     setPlays(seeded)
     setBooks([fresh])
     setCurrentId(fresh.id)
@@ -787,6 +801,7 @@ export function usePlaybook() {
   function reset() {
     const current = historyRef.current
     if (!current) return
+    setUnsavedWork(true)
     const restored = resetPlay(current.present)
     const next = createHistory(restored)
     historyRef.current = next
@@ -796,6 +811,16 @@ export function usePlaybook() {
 
   function stampHistory(next: History): History {
     return { ...next, present: { ...next.present, updatedAt: Date.now() } }
+  }
+
+  async function flushSave() {
+    const current = historyRef.current?.present
+    if (!current || !keepsLocal()) return
+    if (savedPlay.current && samePlay(savedPlay.current, current)) return
+    await savePlay(current)
+    savedPlay.current = current
+    setSaved(true)
+    setUnsavedWork(false)
   }
 
   function doUndo() {
@@ -830,6 +855,7 @@ export function usePlaybook() {
     syncStatus: saveChip(saved, account, online, guest).label,
     saveKind: saveChip(saved, account, online, guest).kind,
     notify,
+    flushSave,
     countInBook: (id: string) => plays.filter((item) => item.bookId === id).length,
     canUndo: history ? canUndo(history) : false,
     canRedo: history ? canRedo(history) : false,

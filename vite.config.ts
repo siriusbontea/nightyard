@@ -10,9 +10,15 @@ export default defineConfig(({ command }) => {
     plugins: process.env.VITEST
       ? []
       : [
+          {
+            name: 'ny-build-id',
+            transformIndexHtml(html: string) {
+              return html.replaceAll('%VITE_BUILD_ID%', process.env.VITE_BUILD_ID ?? '')
+            },
+          },
           preact(),
           VitePWA({
-            registerType: 'autoUpdate',
+            registerType: 'prompt',
             includeAssets: ['favicon.svg', 'icons/*.png'],
             manifest: {
               id: base,
@@ -43,6 +49,9 @@ export default defineConfig(({ command }) => {
                 method,
               })),
               cleanupOutdatedCaches: true,
+              // The new worker waits until the page asks it to take over, then claims open tabs.
+              skipWaiting: false,
+              clientsClaim: true,
             },
           }),
         ],
