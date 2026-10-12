@@ -462,7 +462,6 @@ export function MoreSheet(props: {
   play: Play
   onChange: (play: Play) => void
   onDuplicate: () => void
-  onDelete: () => void
   onExport: () => void
   onReset: () => void
   onFlip: () => void
@@ -470,7 +469,6 @@ export function MoreSheet(props: {
   onClose: () => void
 }) {
   const [askReset, setAskReset] = useState(false)
-  const [askDelete, setAskDelete] = useState(false)
   if (askReset) {
     return (
       <Sheet title="Reset?" onClose={() => setAskReset(false)}>
@@ -516,23 +514,7 @@ export function MoreSheet(props: {
       <button type="button" class="row-btn" onClick={props.onDuplicate}>
         Copy this play
       </button>
-      <button type="button" class="row-btn danger" onClick={() => setAskDelete(true)}>
-        Delete play
-        <small>Takes this play out of the playbook</small>
-      </button>
-      <p class="fine">A free account saves plays on every device. Plays already on this phone stay here. If you delete one, tap Undo.</p>
-      {askDelete ? (
-        <ConfirmDialog
-          title="Delete this play?"
-          body="This takes the play out of your playbook. You can tap Undo to bring it back."
-          confirmLabel="Delete"
-          onCancel={() => setAskDelete(false)}
-          onConfirm={() => {
-            setAskDelete(false)
-            props.onDelete()
-          }}
-        />
-      ) : null}
+      <p class="fine">A free account saves plays on every device. Plays already on this phone stay here.</p>
     </Sheet>
   )
 }

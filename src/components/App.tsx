@@ -904,11 +904,6 @@ export function App() {
             book.duplicate(play.id)
             setSheet(null)
           }}
-          onDelete={() => {
-            book.remove(play.id)
-            setSheet(null)
-            setSelectedPlayerId(null)
-          }}
           onExport={() => setSheet('export')}
           onReset={() => {
             book.reset()
