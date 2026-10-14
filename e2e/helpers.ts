@@ -10,6 +10,14 @@ export async function skipTour(page: Page) {
   await expect(tip).toBeVisible()
   await tip.getByRole('button', { name: 'Skip' }).click()
   await expect(tip).toBeHidden()
+  const install = page.getByRole('dialog', { name: 'Put Night Yard on your home screen' })
+  try {
+    await install.waitFor({ state: 'visible', timeout: 1200 })
+  } catch {
+    return
+  }
+  await install.getByRole('button', { name: 'Not now' }).click()
+  await expect(install).toBeHidden()
 }
 
 export async function tryFirst(page: Page) {

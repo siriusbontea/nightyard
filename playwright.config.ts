@@ -34,5 +34,9 @@ export default defineConfig({
       testMatch: 'desktop.spec.ts',
       use: { viewport: { width: 1280, height: 800 } },
     },
+    {
+      name: 'install',
+      testMatch: 'install.spec.ts',
+    },
   ],
 })

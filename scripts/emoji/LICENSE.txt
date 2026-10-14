@@ -1,0 +1,5 @@
+The football image in 1f3c8.svg is Twemoji 14.0.2 (U+1F3C8).
+
+Copyright 2020 Twitter, Inc and other contributors
+Licensed under CC-BY 4.0: https://creativecommons.org/licenses/by/4.0/
+Source: https://github.com/twitter/twemoji

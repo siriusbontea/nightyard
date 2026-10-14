@@ -1,27 +1,46 @@
-import { mkdir } from 'node:fs/promises'
+import { mkdir, readFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import sharp from 'sharp'
 
-const anyIcon = (size) => `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="96" fill="#0E0E10"/>
-  <rect x="64" y="118" width="384" height="276" rx="28" fill="#165a33"/>
-  <rect x="64" y="118" width="384" height="78" fill="#0e3a2c"/>
-  <path d="M64 286h384" stroke="#F9682D" stroke-width="14" />
-  <polygon points="256,196 312,268 256,324 200,268" fill="#f0c14a"/>
-</svg>`
+/** Twemoji 14.0.2 football (U+1F3C8), CC-BY 4.0. See scripts/emoji/LICENSE.txt. */
+const emojiPath = join(dirname(fileURLToPath(import.meta.url)), 'emoji', '1f3c8.svg')
+const BG = { r: 0x19, g: 0x19, b: 0x19, alpha: 1 }
 
-const maskable = `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#0E0E10"/>
-  <rect x="86" y="150" width="340" height="230" rx="24" fill="#165a33"/>
-  <rect x="86" y="150" width="340" height="64" fill="#0e3a2c"/>
-  <path d="M86 292h340" stroke="#F9682D" stroke-width="16"/>
-  <polygon points="256,214 304,276 256,322 208,276" fill="#f0c14a"/>
-</svg>`
+async function icon(size, paddingRatio) {
+  const inner = Math.max(1, Math.round(size * (1 - paddingRatio * 2)))
+  const glyph = await sharp(await readFile(emojiPath))
+    .resize(inner, inner, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .png()
+    .toBuffer()
+  return sharp({
+    create: { width: size, height: size, channels: 4, background: BG },
+  })
+    .composite([{ input: glyph, gravity: 'centre' }])
+    .png()
+    .toBuffer()
+}
 
-await mkdir('public/icons', { recursive: true })
-await sharp(Buffer.from(anyIcon(192))).png().toFile('public/icons/icon-192.png')
-await sharp(Buffer.from(anyIcon(512))).png().toFile('public/icons/icon-512.png')
-await sharp(Buffer.from(maskable)).png().toFile('public/icons/icon-maskable-512.png')
-await sharp(Buffer.from(anyIcon(180))).resize(180, 180).png().toFile('public/icons/apple-touch-icon.png')
-console.log('icons written')
+const out = join(dirname(fileURLToPath(import.meta.url)), '..', 'public')
+await mkdir(join(out, 'icons'), { recursive: true })
+
+const files = [
+  ['icons/icon-192.png', 192, 0.14],
+  ['icons/icon-512.png', 512, 0.14],
+  ['icons/icon-maskable-192.png', 192, 0.22],
+  ['icons/icon-maskable-512.png', 512, 0.22],
+  ['icons/apple-touch-icon.png', 180, 0.16],
+  ['favicon-32.png', 32, 0.08],
+  ['favicon-16.png', 16, 0.06],
+]
+
+for (const [name, size, pad] of files) {
+  const png = await icon(size, pad)
+  const meta = await sharp(png).metadata()
+  if (meta.width !== size || meta.height !== size) {
+    throw new Error(`${name} is ${meta.width}x${meta.height}`)
+  }
+  await sharp(png).toFile(join(out, name))
+}
+
+console.log('football icons written')

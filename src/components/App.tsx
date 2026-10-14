@@ -46,6 +46,8 @@ import { TipHost } from './TipHost'
 import { CoachTour } from './CoachTour'
 import { useAppUpdate } from '../useAppUpdate'
 import { UPDATE_READY } from '../updateGate'
+import { dismissInstallTip, installTipDismissed, isInstalled, promptInstall, shouldShowInstallTip, useInstallOffer } from '../install'
+import { InstallGuide, InstallTip } from './InstallSheet'
 
 type Tool = 'move' | 'draw'
 type SheetId = null | 'book' | 'presets' | 'player' | 'more' | 'export' | 'play' | 'account' | 'playbook'
@@ -98,6 +100,9 @@ function openingCamera(los = DEFAULT_LOS) {
 export function App() {
   const book = usePlaybook()
   const appUpdate = useAppUpdate()
+  const install = useInstallOffer()
+  const [installGuide, setInstallGuide] = useState(false)
+  const [installTipOff, setInstallTipOff] = useState(false)
   function takeUpdate() {
     void book.flushSave().finally(() => appUpdate.apply())
   }
@@ -341,6 +346,29 @@ export function App() {
   function finishTour() {
     markTipsSeen()
     setTourOn(false)
+  }
+
+  function addToHome() {
+    setSheet(null)
+    if (install.kind === 'prompt') {
+      void promptInstall()
+      return
+    }
+    setInstallGuide(true)
+  }
+
+  function hideInstallTip() {
+    dismissInstallTip()
+    setInstallTipOff(true)
+  }
+
+  function showInstallHelp() {
+    hideInstallTip()
+    if (install.kind === 'prompt') {
+      void promptInstall()
+      return
+    }
+    setInstallGuide(true)
   }
 
   async function makePlaybook(choice: { title: string; style: 'print' | 'color'; plays: Play[] }) {
@@ -906,6 +934,8 @@ export function App() {
       {sheet === 'more' ? (
         <MoreSheet
           play={play}
+          showInstall={!install.installed}
+          onInstall={addToHome}
           onChange={(next) => book.update(next)}
           onDuplicate={() => {
             book.duplicate(play.id)
@@ -1015,6 +1045,17 @@ export function App() {
       {appUpdate.show ? <UpdateToast onApply={takeUpdate} /> : null}
       {book.toast ? <Toast message={book.toast} undo={book.toastUndo} lifted={appUpdate.show} /> : null}
       {tourOn && !showWelcome ? <CoachTour onDone={finishTour} /> : null}
+      {installGuide ? <InstallGuide ios={install.ios} onClose={() => setInstallGuide(false)} /> : null}
+      {shouldShowInstallTip({
+        installed: install.installed || isInstalled(),
+        dismissed: installTipOff || installTipDismissed(),
+        welcome: showWelcome,
+        tourOpen: tourOn,
+        hasPlay: true,
+        tourDone: tipsSeen(),
+      }) ? (
+        <InstallTip onShow={showInstallHelp} onLater={hideInstallTip} />
+      ) : null}
       <TipHost />
     </div>
   )

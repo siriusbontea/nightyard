@@ -19,14 +19,14 @@ export default defineConfig(({ command }) => {
           preact(),
           VitePWA({
             registerType: 'prompt',
-            includeAssets: ['favicon.svg', 'icons/*.png'],
+            includeAssets: ['favicon-16.png', 'favicon-32.png', 'icons/*.png'],
             manifest: {
               id: base,
               name: 'Night Yard',
               short_name: 'Night Yard',
               description: 'Phone-first football play designer',
-              theme_color: '#0E0E10',
-              background_color: '#0E0E10',
+              theme_color: '#F9682D',
+              background_color: '#191919',
               display: 'standalone',
               orientation: 'portrait',
               lang: 'en',
@@ -35,6 +35,7 @@ export default defineConfig(({ command }) => {
               icons: [
                 { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
                 { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+                { src: 'icons/icon-maskable-192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
                 { src: 'icons/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
               ],
             },
@@ -49,6 +50,7 @@ export default defineConfig(({ command }) => {
                 method,
               })),
               cleanupOutdatedCaches: true,
+              cacheId: 'night-yard-2',
               // The new worker waits until the page asks it to take over, then claims open tabs.
               skipWaiting: false,
               clientsClaim: true,

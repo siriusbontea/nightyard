@@ -470,6 +470,8 @@ export function PlayerSheet(props: {
 
 export function MoreSheet(props: {
   play: Play
+  showInstall: boolean
+  onInstall: () => void
   onChange: (play: Play) => void
   onDuplicate: () => void
   onExport: () => void
@@ -501,6 +503,12 @@ export function MoreSheet(props: {
   }
   return (
     <Sheet title="More" onClose={props.onClose}>
+      {props.showInstall ? (
+        <button type="button" class="row-btn" data-tip="Put Night Yard on your home screen" onClick={props.onInstall}>
+          Add to Home Screen
+          <small>Keep Night Yard on this phone</small>
+        </button>
+      ) : null}
       <button type="button" class="row-btn" onClick={() => props.onChange(setShowDefense(props.play, !props.play.showDefense))}>
         {props.play.showDefense ? 'Hide the other team' : 'Show the other team'}
         <small>{formatShort(props.play.format)}</small>
