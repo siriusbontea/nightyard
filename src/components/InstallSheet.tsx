@@ -36,16 +36,8 @@ function IosGuide() {
         <li class="install-step">
           <span class="install-num">1</span>
           <span class="install-copy">
-            <strong>Tap the menu button</strong>
-            <span class="install-hint">Next to the web address, at the bottom.</span>
-            <span class="install-phone" aria-hidden="true">
-              <span class="install-bar">
-                <span class="install-bar-url">nightyard</span>
-                <span class="install-menu">
-                  <MenuIcon />
-                </span>
-              </span>
-            </span>
+            <strong>Tap the menu button (three lines) on the left side of the web address at the bottom.</strong>
+            <SafariBar />
           </span>
         </li>
         <li class="install-step">
@@ -78,11 +70,28 @@ function IosGuide() {
   )
 }
 
-function MenuIcon() {
+function SafariBar() {
   return (
-    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-      <path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" />
-    </svg>
+    <span class="install-safari" aria-hidden="true">
+      <svg viewBox="0 0 320 78" width="100%" role="img">
+        <rect x="0" y="26" width="320" height="52" rx="16" fill="#000" />
+        <circle cx="22" cy="53" r="16" fill="#3a3a3c" />
+        <path d="M25 47.5 18 53l7 5.5" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+        <rect x="46" y="37" width="214" height="32" rx="16" fill="#3a3a3c" />
+        <circle class="install-menu" cx="68" cy="53" r="12" fill="none" stroke="#F9682D" stroke-width="2.5" />
+        <path d="M61 49h13M61 53h9M61 57h5" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" />
+        <text x="86" y="57" fill="#fff" font-size="13" font-family="inherit">nightyard</text>
+        <g transform="translate(230 46)" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M7 2.2a5.6 5.6 0 1 1-1.6-1.4" />
+          <path d="M7 .4v4H3.2" />
+        </g>
+        <circle cx="292" cy="53" r="16" fill="#3a3a3c" />
+        <rect x="286" y="44" width="10" height="10" rx="2" fill="none" stroke="#fff" stroke-width="1.5" />
+        <rect x="282" y="48" width="10" height="10" rx="2" fill="#3a3a3c" stroke="#fff" stroke-width="1.5" />
+        <path d="M68 16v14" fill="none" stroke="#F9682D" stroke-width="3" stroke-linecap="round" />
+        <path d="M60 26l8 10 8-10" fill="none" stroke="#F9682D" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+      </svg>
+    </span>
   )
 }
 

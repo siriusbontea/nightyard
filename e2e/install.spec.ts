@@ -18,8 +18,7 @@ test.describe('iPhone 17 Pro', () => {
     await page.screenshot({ path: `${shots}/install-tip-iphone.png` })
     await page.getByRole('button', { name: 'Show me' }).click()
     const guide = page.getByRole('dialog', { name: 'Add to Home Screen' })
-    await expect(guide.getByText('Tap the menu button')).toBeVisible()
-    await expect(guide.getByText('Next to the web address, at the bottom.')).toBeVisible()
+    await expect(guide.getByText('Tap the menu button (three lines) on the left side of the web address at the bottom.')).toBeVisible()
     await expect(guide.locator('.install-menu')).toBeVisible()
     await expect(guide.getByText('Tap Share')).toBeVisible()
     await expect(guide.getByText('Tap Add to Home Screen')).toBeVisible()
@@ -27,7 +26,12 @@ test.describe('iPhone 17 Pro', () => {
     await expect(guide.getByText('Add', { exact: true })).toBeVisible()
     await expect(guide.getByText('Older iPhones may show the Share button (square with up arrow) right in the bottom bar.')).toBeVisible()
     const viewport = page.viewportSize()
-    for (const name of ['Tap the menu button', 'Tap Share', 'Tap Add to Home Screen', 'Tap Add']) {
+    for (const name of [
+      'Tap the menu button (three lines) on the left side of the web address at the bottom.',
+      'Tap Share',
+      'Tap Add to Home Screen',
+      'Tap Add',
+    ]) {
       const box = await guide.getByText(name, { exact: true }).boundingBox()
       expect(box, name).toBeTruthy()
       expect(box!.y).toBeGreaterThanOrEqual(0)
