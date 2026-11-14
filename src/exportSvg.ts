@@ -15,6 +15,8 @@ export interface ExportOptions {
   includeNotes?: boolean
   includeAssignments?: boolean
   fontCss?: string
+  /** Playbook or team name printed with Night Yard. */
+  byline?: string
 }
 
 export function wrapText(text: string, maxChars: number): string[] {
@@ -38,6 +40,11 @@ export function wrapText(text: string, maxChars: number): string[] {
     if (line) lines.push(line)
   }
   return lines
+}
+
+export function exportFooter(byline?: string): string {
+  const name = (byline ?? '').trim()
+  return name ? `NIGHT YARD · ${name}` : 'NIGHT YARD'
 }
 
 function themeFor(style: ExportStyle): Theme {
@@ -113,7 +120,7 @@ export function renderExportSvg(play: Play, style: ExportStyle, options: ExportO
     }
   }
   parts.push(
-    `<text x="${margin}" y="${EXPORT_H - 40}" fill="${theme.muted}" font-family="Graduate, Impact, sans-serif" font-size="16" letter-spacing="1">NIGHT YARD · SIRIUS BONTEA</text>`,
+    `<text x="${margin}" y="${EXPORT_H - 40}" fill="${theme.muted}" font-family="Graduate, Impact, sans-serif" font-size="16" letter-spacing="1">${escapeText(exportFooter(options.byline))}</text>`,
   )
   parts.push('</svg>')
   return parts.join('')

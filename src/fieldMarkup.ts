@@ -123,7 +123,7 @@ function headMarkup(kind: HeadKind, tip: Point, dir: Point, ink: RouteInk, color
     const len = Math.hypot(dir.x, dir.y) || 1
     const px = -dir.y / len
     const py = dir.x / len
-    const half = ink.headWidth / 2
+    const half = ink.headWidth * 0.8
     const x1 = tip.x + px * half
     const y1 = tip.y + py * half
     const x2 = tip.x - px * half
@@ -188,10 +188,11 @@ function keepTipOnField(tip: Point, dir: Point, pad: number, width: number, heig
 }
 
 function routeParts(stroke: Stroke, play: Play, camera: Camera, theme: Theme, selected: boolean, dim: boolean, pxPerUnit: number): { body: string; head: string } {
-  const shown = strokeFromRim(displayStroke(stroke, play.players), play.players)
+  let shown = strokeFromRim(displayStroke(stroke, play.players), play.players)
   if (shown.points.length < 2) return { body: '', head: '' }
   const { w, h } = viewSize(camera)
   const ink = routeInk(pxPerUnit, pxPerUnit * w, false)
+  shown = settleEnds(shown, play, ink.head / camera.scale)
   const weight = selected ? 1.25 : 1
   const color = routeColor(shown, play, theme)
   const halo = theme.outlineOnly ? '#ffffff' : theme.routeOutline
@@ -237,6 +238,51 @@ function routeParts(stroke: Stroke, play: Play, camera: Camera, theme: Theme, se
   }
 }
 
+/** Man diamonds stop at the target's rim. Block bars stand 2.5 yards past the marker. */
+function settleEnds(stroke: Stroke, play: Play, headYards: number): Stroke {
+  if (stroke.preset === 'man' && stroke.coverId && stroke.points.length >= 2) {
+    const target = play.players.find((player) => player.id === stroke.coverId)
+    if (!target) return stroke
+    const center = plantedMarker(target)
+    const from = stroke.points[0]
+    const dx = center.x - from.x
+    const dy = center.y - from.y
+    const len = Math.hypot(dx, dy) || 1
+    const back = markerReach(target.shape) + headYards + 0.2
+    if (len <= back + 0.25) return stroke
+    const points = stroke.points.map((point, index) =>
+      index === stroke.points.length - 1 ? { x: center.x - (dx / len) * back, y: center.y - (dy / len) * back } : point,
+    )
+    return { ...stroke, points }
+  }
+  if (stroke.kind !== 'block' && stroke.preset !== 'block' && stroke.preset !== 'contain') return stroke
+  const owner = play.players.find((player) => player.id === stroke.playerId)
+  if (!owner) return stroke
+  const center = plantedMarker(owner)
+  const end = stroke.points[stroke.points.length - 1]
+  let dx = end.x - center.x
+  let dy = end.y - center.y
+  let len = Math.hypot(dx, dy)
+  if (len < 0.2) {
+    dy = owner.side === 'defense' ? -1 : 1
+    dx = 0
+    len = 1
+  }
+  const reach = markerReach(owner.shape) + 0.15
+  const min = reach + 2.5
+  const ux = dx / len
+  const uy = dy / len
+  const far = Math.max(len, min)
+  return {
+    ...stroke,
+    points: [
+      { x: center.x + ux * reach, y: center.y + uy * reach },
+      { x: center.x + ux * far, y: center.y + uy * far },
+    ],
+    curves: [null],
+  }
+}
+
 function clearOfMarkers(point: Point, play: Play): Point {
   let next = { ...point }
   for (const player of play.players) {
@@ -269,7 +315,7 @@ function handlesMarkup(stroke: Stroke, play: Play, camera: Camera, pxPerUnit: nu
     const a = stroke.points[i]
     const b = stroke.points[i + 1]
     const curve = stroke.curves[i] ?? null
-    if (dist(a, b) * pxPerYard < 80) continue
+    if (dist(a, b) * pxPerYard < 56) continue
     const mid = clearOfMarkers(curve ?? { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, play)
     const at = fieldToSvg(mid, camera)
     const r = ink.midHandle
@@ -524,12 +570,12 @@ export function fieldMarkup(options: {
     labels.push(drawnPlayer.label)
   }
   for (const piece of drawn) parts.push(piece.body)
-  for (const piece of drawn) parts.push(piece.head)
   parts.push(...labels)
   if (options.showHandles && options.selectedStrokeId) {
     const selected = play.strokes.find((stroke) => stroke.id === options.selectedStrokeId)
     if (selected) parts.push(handlesMarkup(displayStroke(selected, play.players), play, camera, pxPerUnit, Boolean(options.coarse)))
   }
+  for (const piece of drawn) parts.push(piece.head)
   parts.push(`<rect x="1.2" y="1.2" width="${w - 2.4}" height="${h - 2.4}" fill="none" stroke="${theme.line}" stroke-width="2"/>`)
   parts.push('</g>')
   return parts.join('')

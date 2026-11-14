@@ -174,7 +174,7 @@ export function presetPath(preset: PresetId, origin: Point, inside: -1 | 1, form
     case 'drag':
       return { points: [p(0, 0), p(0, 1.3), p(inside * 12, 1.6)], curves: [null, null] }
     case 'block':
-      return { points: [p(0, 0), p(0, 1.35)], curves: [null] }
+      return { points: [p(0, 0), p(0, 4.4)], curves: [null] }
     case 'run':
       return { points: [p(0, 0), p(inside * 1.2, 3), p(inside * 1.2, 11)], curves: [null, null] }
     case 'motion':

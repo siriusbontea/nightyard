@@ -55,7 +55,7 @@ async function inlineEndZoneArt(svg: string): Promise<string> {
 export async function renderPng(
   play: Play,
   style: ExportStyle,
-  options: { includeNotes: boolean; includeAssignments: boolean },
+  options: { includeNotes: boolean; includeAssignments: boolean; byline?: string },
 ): Promise<Blob> {
   let css = ''
   try {

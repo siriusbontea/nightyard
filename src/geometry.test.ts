@@ -98,9 +98,9 @@ describe('route geometry', () => {
     expect(wheel.points.at(-1)!.x).toBeGreaterThan(30)
   })
 
-  it('keeps blocks short and motion flat', () => {
+  it('keeps a block long enough to read and motion flat', () => {
     const block = presetPath('block', { x: 26, y: 0 }, 1)
-    expect(dist(block.points[0], block.points.at(-1)!)).toBeLessThan(2.5)
+    expect(dist(block.points[0], block.points.at(-1)!)).toBeGreaterThan(4)
     const motion = presetPath('motion', { x: 30, y: -1 }, -1)
     expect(motion.points[1].y).toBeCloseTo(-1)
     expect(motion.points[1].x).toBeLessThan(30)

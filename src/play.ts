@@ -556,7 +556,7 @@ export function describeAssignment(player: Player, strokes: Stroke[]): string {
   if (motion) parts.push(motion.preset ? presetLabel(motion.preset) : 'Motion')
   if (main) parts.push(main.preset ? presetLabel(main.preset) : kindLabel(main.kind))
   if (read) parts.push(read.toLowerCase())
-  return parts.join(' · ') || 'Check'
+  return parts.join(' · ') || 'Stay'
 }
 
 export function assignmentRows(play: Play): { label: string; detail: string }[] {

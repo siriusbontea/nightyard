@@ -186,6 +186,7 @@ export async function renderPlaybookPdf(input: {
     const blob = await renderPng(play, input.style, {
       includeNotes: input.includeNotes,
       includeAssignments: input.includeAssignments,
+      byline: input.name,
     })
     pages.push(new Uint8Array(await blob.arrayBuffer()))
   }

@@ -64,7 +64,9 @@ export function TipHost() {
       }
       const rect = el.getBoundingClientRect()
       const below = rect.top < 72
-      const x = Math.min(window.innerWidth - 16, Math.max(16, rect.left + rect.width / 2))
+      const estimated = Math.min(220, Math.max(96, text.length * 7.4 + 24))
+      const half = estimated / 2
+      const x = Math.min(window.innerWidth - 8 - half, Math.max(8 + half, rect.left + rect.width / 2))
       setTip({ text, x, y: below ? rect.bottom : rect.top, below })
     }
 

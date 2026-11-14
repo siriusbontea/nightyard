@@ -74,7 +74,7 @@ function KindChoices(props: { format: Play['format']; strokeKind: StrokeKind; on
 
 function NeatSwitch(props: { on: boolean; onToggle: () => void }) {
   return (
-    <button type="button" class="neat-switch" role="switch" aria-checked={props.on} data-tip="Straighten nearly straight lines" onClick={props.onToggle}>
+    <button type="button" class="neat-switch" role="switch" aria-checked={props.on} aria-label="Neat lines" data-tip="Straighten nearly straight lines" onClick={props.onToggle}>
       <span class="switch-box" aria-hidden="true">{props.on ? '✓' : ''}</span>
       Neat
     </button>
@@ -468,7 +468,7 @@ export function App() {
     if (!play) return
     setBusy(true)
     try {
-      const blob = await renderPng(play, style, { includeNotes, includeAssignments })
+      const blob = await renderPng(play, style, { includeNotes, includeAssignments, byline: book.bookName })
       downloadBlob(`${slug(play.name)}-${style}.png`, blob)
       book.notify(style === 'print' ? 'White picture saved' : 'Color picture saved')
     } catch (error) {
@@ -715,6 +715,7 @@ export function App() {
                   setZoomAt(point)
                   setCloser((value) => !value)
                 }}
+                onPan={setZoomAt}
               />
             </div>
             <button
@@ -729,6 +730,13 @@ export function App() {
             >
               {closer ? 'Whole field' : 'Closer'}
             </button>
+            {closer ? (
+              <div class="zoom-sides" role="group" aria-label="Which part of the field">
+                <button type="button" onClick={() => setZoomAt({ x: FIELD_WIDTH * 0.22, y: zoomAt?.y ?? 0 })}>Left</button>
+                <button type="button" onClick={() => setZoomAt({ x: FIELD_WIDTH / 2, y: zoomAt?.y ?? 0 })}>Middle</button>
+                <button type="button" onClick={() => setZoomAt({ x: FIELD_WIDTH * 0.78, y: zoomAt?.y ?? 0 })}>Right</button>
+              </div>
+            ) : null}
           </div>
         </div>
         <div class="playback" aria-label="Playback">
@@ -757,21 +765,23 @@ export function App() {
           </div>
         </div>
         <p class="hint">
-          {fieldHint({
-            tool,
-            pathsOpen: sheet === 'presets',
-            redraw: Boolean(redrawPlayerId),
-            defense: (selected?.side ?? play.ourSide) === 'defense',
-            guest: book.guest,
-            selected: Boolean(selected),
-          })}
+          {tool === 'draw' && selected && play.strokes.some((stroke) => stroke.playerId === selected.id) ? (
+            <span class="hint-kinds">
+              <KindChoices format={play.format} strokeKind={strokeKind} onPick={setStrokeKind} />
+              <NeatSwitch on={neat} onToggle={toggleNeat} />
+            </span>
+          ) : (
+            fieldHint({
+              tool,
+              pathsOpen: sheet === 'presets',
+              redraw: Boolean(redrawPlayerId),
+              defense: (selected?.side ?? play.ourSide) === 'defense',
+              guest: book.guest,
+              selected: Boolean(selected),
+              crowded: play.format === '11v11' && !closer,
+            })
+          )}
         </p>
-        {tool === 'draw' && selected && play.strokes.some((stroke) => stroke.playerId === selected.id) ? (
-          <div class="kind-float">
-            <KindChoices format={play.format} strokeKind={strokeKind} onPick={setStrokeKind} />
-            <NeatSwitch on={neat} onToggle={toggleNeat} />
-          </div>
-        ) : null}
         <div class="action-slot">
           {selected && play.strokes.some((stroke) => stroke.playerId === selected.id) ? (
             <div class="route-actions">
@@ -1002,6 +1012,7 @@ export function App() {
           onFlip={() => {
             stopPlayback()
             book.update(flipPlay(play))
+            book.notify('Play flipped. Tap Undo.', () => book.undo())
             setSheet(null)
           }}
           onShowTips={() => {

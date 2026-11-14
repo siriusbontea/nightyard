@@ -509,7 +509,7 @@ export function MoreSheet(props: {
   if (askReset) {
     return (
       <Sheet title="Reset?" onClose={() => setAskReset(false)}>
-        <p class="fine">This puts the play back to how it started. You cannot undo it by staying on this screen. Your other plays stay.</p>
+        <p class="fine">Reset puts the play back to how it started. Undo will not bring it back. Your other plays stay.</p>
         <button type="button" class="primary wide choice" onClick={() => setAskReset(false)}>
           Cancel
         </button>
@@ -534,7 +534,7 @@ export function MoreSheet(props: {
           <small>Keep Night Yard on this phone</small>
         </button>
       ) : null}
-      <button type="button" class="row-btn" onClick={() => props.onChange(setShowDefense(props.play, !props.play.showDefense))}>
+      <button type="button" class="row-btn" onClick={() => { props.onChange(setShowDefense(props.play, !props.play.showDefense)); props.onClose() }}>
         {props.play.showDefense ? 'Hide the other team' : 'Show the other team'}
         <small>{formatShort(props.play.format)}</small>
       </button>
@@ -560,7 +560,7 @@ export function MoreSheet(props: {
       <HeadKey />
       <a class="row-btn about-link" href="https://github.com/siriusbontea/nightyard" target="_blank" rel="noreferrer">
         About Night Yard
-        <small>A play designer you can learn without a grown-up. Version 1.1.0</small>
+        <small>A play designer you can learn without a grown-up. Version 1.2.0</small>
       </a>
       <p class="fine">A free account saves plays on every device. Plays already on this phone stay here.</p>
     </Sheet>

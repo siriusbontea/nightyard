@@ -1,220 +1,143 @@
 # Night Yard
 
-Phone-first football play designer for flag (5v5 through 9v9) and 11v11. Draw routes on a night-game field, play them back, keep a playbook in the browser, and export letter-size PNG sheets. It installs as a PWA and the production build is a static `dist/` folder.
+**A free, open-source football play designer** for flag 5v5 through 9v9 and 11v11 tackle. Built so a kid can draw a play without help.
 
-Personal project for Sirius Bontea.
+![Night Yard on a desktop, with a route selected](docs/images/hero-desktop.png)
 
-## Local development
+Play it live: **[https://www.roninforged.com/nightyard/](https://www.roninforged.com/nightyard/)**
+
+| | |
+|---|---|
+| **Who it is for** | Kids, parents, and coaches |
+| **Formats** | Flag 5v5, 6v6, 7v7, 8v8, 9v9, and 11v11 tackle |
+| **License** | MIT ([LICENSE](LICENSE)) |
+| **Runs in** | A phone, tablet, or computer browser |
+| **Account** | Optional. Try it first. |
+
+---
+
+## What you get
+
+- **Draw routes** with your finger or a mouse. The line tidies itself as you go.
+- **Neat lines** straighten a wobbly drag when it is almost straight.
+- **Move players**, flip a route, and delete it with Undo.
+- **Ready paths** such as Go, Slant, Out, Curl, and Block for linemen.
+- **Defense** jobs: zones, man coverage, and a rush.
+- **Playback** at Slow, Normal, or Fast.
+- **Save** on this phone, or make a free account and open the same plays on another device.
+- **Pictures** to print or share: color or white, one play or a whole playbook PDF.
+- **Home screen** so Night Yard opens like a game.
+
+---
+
+## Draw your first play in 60 seconds
+
+1. Open [Night Yard](https://www.roninforged.com/nightyard/).
+2. Tap **Try it first**.
+3. Tap **Skip** if a short tip pops up.
+4. Tap **Draw** at the bottom.
+5. Put your finger on an orange player and drag. Lift your finger. That line is a route.
+6. Tap the orange play button to watch it.
+
+That is the whole idea. The rest of the buttons are there when you want them.
+
+---
+
+## A look around
+
+**On a phone.** The field, the play button, and Move, Draw, Paths, and More.
+
+![Night Yard on a phone](docs/images/phone-play.png)
+
+**Draw.** Route, Walk in, Block, and Run pick the kind of line. Neat straightens it. Redraw, Flip, and Delete show up after you draw.
+
+![Draw tools under the field](docs/images/draw.png)
+
+**What the ends mean**
+
+| End | It means |
+|---|---|
+| Arrow | Keep going |
+| Dot | Stop |
+| Chevron | Before the snap |
+| Bar | Block |
+| Diamond | Covers a player |
+
+**Paths.** Tap a player, then tap a ready path. Left and Right flip which way it breaks.
+
+![The Paths sheet, with the end legend](docs/images/paths.png)
+
+**Move.** Drag a player to a new spot. Tap a line to bend it. On a full 11v11 field, tap **Closer** to see the players bigger. Left, Middle, and Right move that closer view. **Whole field** brings everyone back. You can also drag the empty grass to slide the view, or double-tap the field.
+
+**Flip.** Flip one route from the button under the field. Flip the whole play from **More**. Both can be undone.
+
+**Watch it.** Slow, Normal, and Fast sit next to the slider.
+
+**Save and open again.** Plays stay on this phone. A free account keeps them when you use another phone. The chip at the top tells you if they are saved.
+
+**Pictures.** **More**, then **Download pictures**. Color is for the screen. White is for paper. A playbook PDF puts several plays in one file. The footer says Night Yard and your playbook name.
+
+**Home screen.** **More**, then **Add to Home Screen**. On an iPhone, Night Yard shows the taps. On Android, one tap installs it.
+
+![More, including Add to Home Screen and About](docs/images/more.png)
+
+---
+
+## Questions
+
+**Does it cost money?**
+No.
+
+**Do I need an account?**
+No. Tap **Try it first** and draw. An account is only for saving plays onto another device.
+
+**Can I use it for flag and for tackle?**
+Yes. Flag is 5v5 through 9v9. Tackle is 11v11. Flag plays do not have a Block path. Tackle does.
+
+**The players are on top of each other.**
+Tap **Closer**. Then Left, Middle, or Right, or drag the grass.
+
+**I drew the wrong line.**
+Tap **Delete**, or **Undo** at the top. Tap the Undo on the little message if you want the line back.
+
+**Can I put it on my home screen?**
+Yes. **More**, then **Add to Home Screen**.
+
+---
+
+## Run it on your computer
+
+You need Node.js 22 or newer.
 
 ```bash
+git clone https://github.com/siriusbontea/nightyard.git
+cd nightyard
 npm install
 npm run dev
 ```
 
-The dev server is [http://127.0.0.1:43123](http://127.0.0.1:43123). Development uses base path `/`, so asset URLs and the document root stay at the origin root. The service worker is not registered in dev.
+Open **http://127.0.0.1:43123**.
 
-A free account is optional. The first visit shows a welcome card once on that device: make a free account, or try the editor as a guest. Guests can draw and play in that session. Save, Save all, a new saved play, and sync ask for a free account instead of writing, and the play stays on the screen until they sign up. A small guest chip opens signup. Plays already saved on this phone stay there, and making an account uploads them. Sign in with a username and password (8 or more characters, no email) and plays sync to PocketBase at `/nightyard/pb`. The dev server proxies that path to `127.0.0.1:8090`. Set `VITE_POCKETBASE_URL` to a full URL to point somewhere else. See `server/README.md` for the schema and how to start PocketBase.
+| Command | What it does |
+|---|---|
+| `npm run dev` | Run the app while you work on it |
+| `npm test` | Run the unit tests |
+| `npm run test:e2e` | Run the browser tests. Needs PocketBase on port 8090 |
+| `npm run build` | Typecheck and build. Uses `/nightyard/` unless you set `BASE_PATH` |
+| `npm run build:prod` | The live-site build, always at `/nightyard/` |
 
-```bash
-npm test
-npm run test:e2e
-```
+The live site is served from `/nightyard/`. A production build writes a static `dist/` folder. Stop `npm run dev` before `npm run preview` if you want to look at that folder on the same port.
 
-`npm test` is the unit suite. `npm run test:e2e` runs Playwright against the dev server and a local PocketBase on port 8090. The dev server can already be running; Playwright reuses it.
+---
 
-## Build
+## Accounts and PocketBase
 
-Production defaults to base path `/nightyard/`, which is the path on [https://www.roninforged.com/nightyard/](https://www.roninforged.com/nightyard/). `BASE_PATH` overrides that for any production build. The value is normalized to a leading and trailing slash (`nightyard` and `/nightyard` both become `/nightyard/`). `/` stays the site root.
+Drawing does not need a server. A free account is optional. When you make one, plays sync through PocketBase. In development the app talks to it at `/nightyard/pb`, which the dev server forwards to `127.0.0.1:8090`. See [server/README.md](server/README.md) for how to start PocketBase and what it stores. Set `VITE_POCKETBASE_URL` if it lives somewhere else.
 
-| Command | Base path |
-| --- | --- |
-| `npm run build` | `/nightyard/`, or `$BASE_PATH` when set |
-| `npm run build:prod` | always `/nightyard/` |
-| `BASE_PATH=/ npm run build` | `/` (subdomain or dedicated host) |
+---
 
-`npm run build` typechecks, then runs Vite. `npm run build:prod` is the droplet build: it sets `BASE_PATH=/nightyard/` and emits `dist/` with manifest `start_url` and `scope` of `/nightyard/`, and a service worker whose navigation fallback only claims `/nightyard` and paths under it. The worker does not cache `/nightyard/pb` and does not answer that path with the app shell. It uses a network-only route for those requests.
+## Credits
 
-Preview a production build locally (same port as dev; stop `npm run dev` first):
+Made by Sirius Bontea.
 
-```bash
-npm run build:prod
-npm run preview
-```
-
-Open [http://127.0.0.1:43123/nightyard/](http://127.0.0.1:43123/nightyard/).
-
-## Deploy to a droplet
-
-Target: Nginx 1.24 on Ubuntu, inside the existing `www.roninforged.com` site. The app does not need a Node process after the build. Files are served from `/var/www/nightyard/` at `https://www.roninforged.com/nightyard/`.
-
-```bash
-npm ci
-npm run build:prod
-sudo mkdir -p /var/www/nightyard
-sudo rsync -a --delete dist/ /var/www/nightyard/
-sudo nginx -t && sudo systemctl reload nginx
-```
-
-`dist/index.html` lands at `/var/www/nightyard/index.html`. HTTPS stays on the existing `www.roninforged.com` server block. The service worker file is `/nightyard/sw.js`, so its maximum scope is `/nightyard/` and it does not control the rest of the site.
-
-Hashed files live under `/nightyard/assets/`. `index.html`, `sw.js`, `registerSW.js`, and `workbox-*.js` must not be cached. Nginx 1.24’s stock `mime.types` has no `webmanifest` entry, so the manifest location sets `application/manifest+json` itself.
-
-`alias` and `try_files` with a URI fallback disagree in Nginx 1.24, so the SPA fallback is a named location. Exact `=` locations for the shell files beat the prefix location. `try_files $uri =404` is safe on the assets alias because the last argument is a status code, not a URI.
-
-```nginx
-# Night Yard — https://www.roninforged.com/nightyard/
-# alias target: /var/www/nightyard/
-
-location = /nightyard/index.html {
-    alias /var/www/nightyard/index.html;
-    add_header Cache-Control "no-cache";
-}
-
-location = /nightyard/sw.js {
-    alias /var/www/nightyard/sw.js;
-    default_type application/javascript;
-    add_header Cache-Control "no-cache";
-}
-
-location = /nightyard/registerSW.js {
-    alias /var/www/nightyard/registerSW.js;
-    default_type application/javascript;
-    add_header Cache-Control "no-cache";
-}
-
-location ~* ^/nightyard/(workbox-[^/]+\.js)$ {
-    alias /var/www/nightyard/$1;
-    default_type application/javascript;
-    add_header Cache-Control "no-cache";
-}
-
-location = /nightyard/manifest.webmanifest {
-    alias /var/www/nightyard/manifest.webmanifest;
-    default_type application/manifest+json;
-    add_header Cache-Control "no-cache";
-}
-
-location ^~ /nightyard/pb/ {
-    proxy_pass http://127.0.0.1:8090/;
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-Proto $scheme;
-    proxy_set_header X-Forwarded-Host $host;
-}
-
-location ^~ /nightyard/assets/ {
-    alias /var/www/nightyard/assets/;
-    try_files $uri =404;
-    add_header Cache-Control "public, max-age=31536000, immutable";
-}
-
-location /nightyard/ {
-    alias /var/www/nightyard/;
-    index index.html;
-    error_page 404 = @nightyard_spa;
-}
-
-location @nightyard_spa {
-    rewrite ^ /nightyard/index.html last;
-}
-```
-
-Reload Nginx after `nginx -t` succeeds. Confirm the manifest response is `Content-Type: application/manifest+json` and that `index.html` and `sw.js` send `Cache-Control: no-cache`.
-
-### Leaving `/playbook/`
-
-Phones that installed the app at `/playbook/` still have that service worker. Do not 301 `/playbook/sw.js` or `/playbook/registerSW.js`: a redirected worker script fails to update. Serve a kill-switch worker from `/var/www/playbook-redirect/` and redirect every other `/playbook` URL to the matching `/nightyard` path.
-
-```bash
-sudo mkdir -p /var/www/playbook-redirect
-# playbook-killswitch-sw.js → sw.js
-# playbook-registerSW.js → registerSW.js
-```
-
-```nginx
-location = /playbook/sw.js {
-    alias /var/www/playbook-redirect/sw.js;
-    default_type application/javascript;
-    add_header Cache-Control "no-cache";
-}
-
-location = /playbook/registerSW.js {
-    alias /var/www/playbook-redirect/registerSW.js;
-    default_type application/javascript;
-    add_header Cache-Control "no-cache";
-}
-
-location = /playbook {
-    return 301 /nightyard/;
-}
-
-location = /playbook/ {
-    return 301 /nightyard/;
-}
-
-location /playbook/ {
-    rewrite ^/playbook/(.*)$ /nightyard/$1 permanent;
-}
-```
-
-The exact `=` locations win over the prefix rewrite, so the worker script is a 200. Saved plays stay in IndexedDB: the database name is still `night-yard`, and the file format is unchanged. The new worker has a new scope, so it does not see the old caches; the kill switch deletes those.
-
-### Subdomain alternative
-
-A host such as `nightyard.roninforged.com` uses a root build, not `/nightyard/`:
-
-```bash
-BASE_PATH=/ npm run build
-sudo rsync -a --delete dist/ /var/www/nightyard-host/
-```
-
-```nginx
-server {
-    listen 443 ssl http2;
-    server_name nightyard.roninforged.com;
-    root /var/www/nightyard-host;
-
-    # ssl_certificate and ssl_certificate_key: the droplet's existing cert lines.
-
-    location = /index.html {
-        add_header Cache-Control "no-cache";
-    }
-
-    location = /sw.js {
-        default_type application/javascript;
-        add_header Cache-Control "no-cache";
-    }
-
-    location = /registerSW.js {
-        default_type application/javascript;
-        add_header Cache-Control "no-cache";
-    }
-
-    location ~* ^/workbox-[^/]+\.js$ {
-        default_type application/javascript;
-        add_header Cache-Control "no-cache";
-    }
-
-    location = /manifest.webmanifest {
-        default_type application/manifest+json;
-        add_header Cache-Control "no-cache";
-    }
-
-    location ^~ /assets/ {
-        try_files $uri =404;
-        add_header Cache-Control "public, max-age=31536000, immutable";
-    }
-
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-}
-```
-
-## Scripts
-
-- `npm run dev` — Vite on port 43123, base `/`
-- `npm run build` — typecheck and production build (default base `/nightyard/`)
-- `npm run build:prod` — production build pinned to `/nightyard/`
-- `npm run preview` — serve `dist/` on port 43123
-- `npm test` — play model, route geometry, save/load, export markup, base path
-- `npm run icons` — regenerate PWA icons from `public/favicon.svg`
+Thanks to Bear for testing and ideas, including the flip feature.

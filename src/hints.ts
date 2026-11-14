@@ -5,8 +5,12 @@ export function fieldHint(input: {
   defense: boolean
   guest: boolean
   selected: boolean
+  crowded?: boolean
 }): string {
   if (input.redraw) return 'Draw a new path from here.'
+  if (!input.selected && input.tool === 'move' && input.crowded && !input.pathsOpen) {
+    return 'Drag a player. Tap Closer to see them bigger.'
+  }
   if (input.pathsOpen) {
     return input.defense ? 'Pick a defender, then pick a job.' : 'Pick a player, then pick a path.'
   }

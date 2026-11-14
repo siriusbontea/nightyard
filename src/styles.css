@@ -701,6 +701,27 @@ textarea { min-height: 96px; resize: vertical; }
   display: inline-block;
   box-shadow: 0 0 0 1px #071018;
 }
+.hint-kinds { display: flex; align-items: center; gap: 6px; width: 100%; min-width: 0; }
+.hint-kinds .kind-row { flex: 1; min-width: 0; padding: 0; min-height: 0; }
+.zoom-sides {
+  position: absolute;
+  top: 58px;
+  right: 18px;
+  z-index: 3;
+  display: flex;
+  gap: 4px;
+}
+.zoom-sides button {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(14, 14, 16, 0.82);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 750;
+}
 .hint {
   height: 52px;
   max-height: 52px;
@@ -1405,6 +1426,10 @@ button.toast { font-weight: 700; text-align: center; }
   }
   .scrim { align-items: center; padding: 24px; }
   .sheet { border-radius: 22px; max-height: min(84dvh, 820px); }
+}
+
+@media (min-width: 700px) and (max-width: 1100px) and (orientation: portrait) {
+  .sheet { max-height: 40dvh; }
 }
 
 @media (prefers-reduced-motion: reduce) {

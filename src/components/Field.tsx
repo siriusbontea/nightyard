@@ -31,6 +31,7 @@ interface FieldProps {
   zoom?: number
   zoomAt?: Point | null
   onToggleZoom?: (point: Point) => void
+  onPan?: (point: Point) => void
 }
 
 type Gesture =
@@ -61,6 +62,14 @@ type Gesture =
       pointerId: number
       snapshot: Play
       latest?: Play
+    }
+  | {
+      type: 'pan'
+      pointerId: number
+      clientX: number
+      clientY: number
+      startAt: Point
+      moved: boolean
     }
 
 function primaryStrokeId(play: Play, playerId: string): string | null {
@@ -170,7 +179,7 @@ export function Field(props: FieldProps) {
           stroke: Math.max(1.05, yardsFor(18)),
           marker: Math.max(1.7, yardsFor(18)),
           cornerBias: yardsFor(30),
-          minBend: yardsFor(80),
+          minBend: yardsFor(56),
         },
         {
           showHandles: current.tool === 'move' && !current.redrawPlayerId,
@@ -225,6 +234,18 @@ export function Field(props: FieldProps) {
         }
         return
       }
+      if (hit.type === 'field' && (current.zoom ?? 1) > 1 && current.onPan) {
+        gesturing.current = true
+        active = {
+          type: 'pan',
+          pointerId: event.pointerId,
+          clientX: event.clientX,
+          clientY: event.clientY,
+          startAt: current.zoomAt ?? { x: FIELD_WIDTH / 2, y: 0 },
+          moved: false,
+        }
+        return
+      }
       if (hit.type === 'stroke') {
         const stroke = current.play.strokes.find((item) => item.id === hit.id)
         current.onSelect(stroke?.playerId ?? null, hit.id)
@@ -238,6 +259,19 @@ export function Field(props: FieldProps) {
       if (!gesture || event.pointerId !== gesture.pointerId) return
       const current = propsRef.current
       const point = clientToField(svg, event.clientX, event.clientY, current.camera)
+      if (gesture.type === 'pan') {
+        const rect = svg.getBoundingClientRect()
+        if (rect.width < 1 || rect.height < 1) return
+        const dx = event.clientX - gesture.clientX
+        const dy = event.clientY - gesture.clientY
+        if (Math.hypot(dx, dy) > 6) gesture.moved = true
+        const viewW = (svg.viewBox.baseVal.width || 1)
+        const viewH = (svg.viewBox.baseVal.height || 1)
+        const yardsX = (dx / rect.width) * (viewW / current.camera.scale)
+        const yardsY = -(dy / rect.height) * (viewH / current.camera.scale)
+        current.onPan?.({ x: gesture.startAt.x - yardsX, y: gesture.startAt.y - yardsY })
+        return
+      }
       if (gesture.type === 'draw') {
         const last = gesture.raw[gesture.raw.length - 1]
         const sample = clampToField(point, current.play.los)
@@ -300,6 +334,10 @@ export function Field(props: FieldProps) {
       active = null
       gesturing.current = false
       const current = propsRef.current
+      if (finished.type === 'pan') {
+        if (!finished.moved) current.onSelect(null, null)
+        return
+      }
       if (finished.type === 'draw') {
         const length = finished.raw.reduce((sum, point, index) => (index === 0 ? 0 : sum + dist(finished.raw[index - 1], point)), 0)
         if (!finished.moved || length < 0.9 || finished.raw.length < 2) {
@@ -378,6 +416,7 @@ export function Field(props: FieldProps) {
       const finished = active
       active = null
       gesturing.current = false
+      if (finished.type === 'pan') return
       paint(finished.snapshot, propsRef.current.tool === 'move', 0)
     }
 
