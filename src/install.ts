@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'preact/hooks'
 
 const TIP_KEY = 'night-yard-install-tip'
+const VISIT_KEY = 'night-yard-visits'
 
 export interface InstallPrompt extends Event {
   prompt: () => Promise<void>
@@ -77,7 +78,23 @@ export function dismissInstallTip(): void {
   }
 }
 
-/** After the first play is on screen and the tour is finished. Never while installed. */
+let visitNoted = false
+
+/** Count a page load. The home-screen tip waits until the second visit. */
+export function noteVisit(): number {
+  try {
+    const current = Number(globalThis.localStorage?.getItem(VISIT_KEY) || '0')
+    if (visitNoted) return current
+    visitNoted = true
+    const next = current + 1
+    globalThis.localStorage?.setItem(VISIT_KEY, String(next))
+    return next
+  } catch {
+    return 1
+  }
+}
+
+/** After the first play is on screen and the tour is finished. Never on the first visit, and never while installed. */
 export function shouldShowInstallTip(input: {
   installed: boolean
   dismissed: boolean
@@ -85,8 +102,9 @@ export function shouldShowInstallTip(input: {
   tourOpen: boolean
   hasPlay: boolean
   tourDone: boolean
+  returning: boolean
 }): boolean {
-  if (input.installed || input.dismissed || input.welcome || input.tourOpen) return false
+  if (input.installed || input.dismissed || input.welcome || input.tourOpen || !input.returning) return false
   return input.hasPlay && input.tourDone
 }
 

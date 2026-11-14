@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'preact/hooks'
 import { applyPositions, fieldMarkup } from '../fieldMarkup'
-import { DRAW_PIXELS, FIELD_WIDTH, clamp, dist, moveStrokePoint, plantedMarker, setStrokeCurve, simplifyPath, viewSize, type Camera } from '../geometry'
+import { DRAW_PIXELS, FIELD_WIDTH, clamp, clampToField, dist, moveStrokePoint, plantedMarker, setStrokeCurve, simplifyPath, smoothPreview, tidyStroke, viewSize, type Camera } from '../geometry'
 import { clientToField, hitTest, playerHitYards } from '../hit'
 import { playerAtTime } from '../playback'
 import { replaceMainStroke, replaceStroke, setStroke, translatePlayer } from '../play'
@@ -25,6 +25,8 @@ interface FieldProps {
   /** One new finger path for this player. Does not change the Move or Draw tool. */
   redrawPlayerId?: string | null
   onRedrawDone?: () => void
+  /** Snap nearly straight pieces. Off leaves the smoothed line as drawn. */
+  neat?: boolean
 }
 
 type Gesture =
@@ -73,6 +75,10 @@ export function Field(props: FieldProps) {
     const svg = svgRef.current
     if (!svg) return
     const current = propsRef.current
+    const rect = svg.getBoundingClientRect()
+    const vb = svg.viewBox.baseVal.width || viewSize(current.camera).w
+    const pxPerUnit = rect.width > 40 ? rect.width / vb : 390 / vb
+    const coarse = window.matchMedia('(pointer: coarse)').matches
     svg.innerHTML = fieldMarkup({
       play,
       camera: current.camera,
@@ -80,6 +86,9 @@ export function Field(props: FieldProps) {
       selectedPlayerId: current.selectedPlayerId,
       selectedStrokeId: current.selectedStrokeId,
       showHandles,
+      pxPerUnit,
+      coarse,
+      drawMode: current.tool === 'draw',
     })
     // innerHTML does not start a load for <image href>. Set it again so the paint shows.
     for (const image of svg.querySelectorAll('image')) {
@@ -141,7 +150,7 @@ export function Field(props: FieldProps) {
         current.play,
         point,
         {
-          handle: Math.max(1.15, yardsFor(22)),
+          handle: Math.max(1.15, yardsFor(window.matchMedia('(pointer: coarse)').matches ? 44 : 28)),
           player: playerHitYards(yardsFor),
           stroke: Math.max(1.05, yardsFor(18)),
         },
@@ -213,17 +222,19 @@ export function Field(props: FieldProps) {
       const point = clientToField(svg, event.clientX, event.clientY, current.camera)
       if (gesture.type === 'draw') {
         const last = gesture.raw[gesture.raw.length - 1]
-        if (dist(last, point) >= Math.max(0.05, yardsFor(DRAW_PIXELS.sample))) {
-          gesture.raw.push(point)
+        const sample = clampToField(point, current.play.los)
+        if (dist(last, sample) >= Math.max(0.05, yardsFor(DRAW_PIXELS.sample))) {
+          gesture.raw.push(sample)
           gesture.moved = true
         }
         if (gesture.raw.length < 2) return
+        const smoothed = smoothPreview(gesture.raw)
         const draft: Stroke = {
           id: 'draft',
           playerId: gesture.playerId,
           kind: gesture.kind,
-          points: gesture.raw,
-          curves: gesture.raw.slice(1).map(() => null),
+          points: smoothed,
+          curves: smoothed.slice(1).map(() => null),
           preset: null,
         }
         const preview = draft.kind === 'motion' ? setStroke(gesture.snapshot, draft) : replaceMainStroke(gesture.snapshot, draft)
@@ -242,10 +253,11 @@ export function Field(props: FieldProps) {
       }
       const stroke = gesture.snapshot.strokes.find((item) => item.id === gesture.strokeId)
       if (!stroke) return
+      const held = clampToField(point, gesture.snapshot.los)
       const next =
         gesture.handleKind === 'point'
-          ? moveStrokePoint(stroke, gesture.index, point)
-          : setStrokeCurve(stroke, gesture.index, bendOrStraight(stroke, gesture.index, point))
+          ? moveStrokePoint(stroke, gesture.index, held)
+          : setStrokeCurve(stroke, gesture.index, bendOrStraight(stroke, gesture.index, held))
       gesture.latest = replaceStroke(gesture.snapshot, next)
       paint(gesture.latest, true, 0)
     }
@@ -276,13 +288,15 @@ export function Field(props: FieldProps) {
           return
         }
         const home = plantedMarker(player)
-        simple.points[0] = { x: home.x, y: home.y }
+        const tidy = current.neat === false ? simple : tidyStroke(simple.points, simple.curves)
+        tidy.points[0] = { x: home.x, y: home.y }
+        tidy.points = tidy.points.map((spot, index) => (index === 0 ? spot : clampToField(spot, finished.snapshot.los)))
         const stroke: Stroke = {
           id: uid(),
           playerId: player.id,
           kind: finished.kind,
-          points: simple.points,
-          curves: simple.curves,
+          points: tidy.points,
+          curves: tidy.curves,
           preset: null,
         }
         current.onSelect(player.id, stroke.id)
@@ -308,17 +322,25 @@ export function Field(props: FieldProps) {
       else paint(finished.snapshot, true, 0)
     }
 
+    const onCancel = (event: PointerEvent) => {
+      if (!active || event.pointerId !== active.pointerId) return
+      const finished = active
+      active = null
+      gesturing.current = false
+      paint(finished.snapshot, propsRef.current.tool === 'move', 0)
+    }
+
     svg.addEventListener('pointerdown', onDown)
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
-    window.addEventListener('pointercancel', onUp)
+    window.addEventListener('pointercancel', onCancel)
     const blockMenu = (event: Event) => event.preventDefault()
     svg.addEventListener('contextmenu', blockMenu)
     return () => {
       svg.removeEventListener('pointerdown', onDown)
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
-      window.removeEventListener('pointercancel', onUp)
+      window.removeEventListener('pointercancel', onCancel)
       svg.removeEventListener('contextmenu', blockMenu)
     }
   }, [])

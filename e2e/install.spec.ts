@@ -107,6 +107,9 @@ test.describe('desktop', () => {
 })
 
 async function landOnFirstPlay(page: Page) {
+  await page.addInitScript(() => {
+    localStorage.setItem('night-yard-visits', '1')
+  })
   await openApp(page)
   await page.getByRole('button', { name: 'Try it first' }).click()
   const tour = page.getByRole('dialog', { name: 'Tip' })

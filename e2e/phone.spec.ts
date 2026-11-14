@@ -92,8 +92,8 @@ test('try first shows the tour, then Corndog and Stick', async () => {
   await expect(page.locator('.sub')).toContainText('Start on the 30')
 
   const viewport = await page.locator('meta[name="viewport"]').getAttribute('content')
-  expect(viewport).toContain('maximum-scale=1')
-  expect(viewport).toContain('user-scalable=no')
+  expect(viewport).toContain('width=device-width')
+  expect(viewport).not.toContain('user-scalable=no')
   const appHeight = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--app-height').trim())
   expect(appHeight).toMatch(/px$/)
 })

@@ -91,10 +91,12 @@ export function TipHost() {
     }
 
     function onDown(event: PointerEvent) {
-      if (event.pointerType === 'touch') lastTouch = Date.now()
-      if (mouseLike(event)) return
-      window.clearTimeout(pressTimer)
+      setTip(null)
       window.clearTimeout(hideTimer)
+      if (event.pointerType === 'touch') lastTouch = Date.now()
+      const coarse = window.matchMedia('(pointer: coarse)').matches
+      if (coarse || mouseLike(event)) return
+      window.clearTimeout(pressTimer)
       const el = tipTarget(event.target)
       if (!el || el.closest('.tour-card') || blocksTips(el)) return
       pressTimer = window.setTimeout(() => {
@@ -105,12 +107,11 @@ export function TipHost() {
 
     function onUp() {
       window.clearTimeout(pressTimer)
-      if (!suppressClick) return
       window.clearTimeout(hideTimer)
       hideTimer = window.setTimeout(() => {
         setTip(null)
         suppressClick = false
-      }, 1600)
+      }, 600)
     }
 
     function onClick(event: MouseEvent) {

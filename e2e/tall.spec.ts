@@ -29,6 +29,6 @@ test('tall phone keeps the welcome card, field, and tools on screen', async ({ p
   expect(fit.appHeight).toMatch(/px$/)
 
   const viewport = await page.locator('meta[name="viewport"]').getAttribute('content')
-  expect(viewport).toContain('maximum-scale=1')
-  expect(viewport).toContain('user-scalable=no')
+  expect(viewport).toContain('width=device-width')
+  expect(viewport).not.toContain('user-scalable=no')
 })

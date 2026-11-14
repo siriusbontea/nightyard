@@ -11,12 +11,12 @@ export function fieldHint(input: {
     return input.defense ? 'Pick a defender, then pick a job.' : 'Pick a player, then pick a path.'
   }
   if (input.tool === 'draw') {
-    return input.defense ? 'Pick a defender, then draw a job.' : 'Pick a player, then draw with your finger.'
+    return input.defense ? 'Drag from a defender to draw a job.' : 'Drag from a player to draw a route.'
   }
   if (input.defense) {
-    return input.selected ? 'Drag to move. Tap to change the job.' : 'Drag a defender to move. Tap one to change them.'
+    return input.selected ? 'Drag a defender to move it. Tap a line to bend it.' : 'Drag a defender to move. Tap one to change them.'
   }
-  if (input.selected) return 'Drag to move. Tap to change them.'
+  if (input.selected) return 'Drag a player to move it. Tap a line to bend it.'
   return 'Drag a player to move. Tap a player to change them.'
 }
 

@@ -204,11 +204,12 @@ export async function renderPlaybookPdf(input: {
 /** Field-only diagram. Scale is high enough to stay sharp on a letter page. */
 export const DIAGRAM_SCALE = 28
 
-export function renderDiagramSvg(play: Play, style: ExportStyle): string {
+export function renderDiagramSvg(play: Play, style: ExportStyle, displayPx?: number): string {
   const theme = style === 'print' ? PRINT : COLOR_FIELD
   const camera = { ahead: 30, behind: 16, scale: DIAGRAM_SCALE }
   const size = viewSize(camera)
-  const body = fieldMarkup({ play, camera, theme, showHandles: false })
+  const shown = displayPx && displayPx > 40 ? displayPx : size.w
+  const body = fieldMarkup({ play, camera, theme, showHandles: false, pxPerUnit: shown / size.w })
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size.w.toFixed(0)}" height="${size.h.toFixed(0)}" viewBox="0 0 ${size.w} ${size.h}">${body}</svg>`
 }
 
@@ -441,7 +442,7 @@ export async function renderPlaybookFile(input: {
       formatLabel: formatLabel(play.format),
       category: categoryOf(play),
       notes: play.notes,
-      diagram: await svgToPng(renderDiagramSvg(play, input.style)),
+      diagram: await svgToPng(renderDiagramSvg(play, input.style, 360)),
     })
   }
   return buildPlaybookDocument({

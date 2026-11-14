@@ -414,6 +414,72 @@ export function moveStrokePoint(stroke: Stroke, index: number, point: Point): St
   }
 }
 
+/** Keep a drawn point on the marked field, including both end zones. */
+export function clampToField(point: Point, los: number): Point {
+  const yMax = los + END_ZONE_DEPTH - 0.4
+  const yMin = los - FIELD_LENGTH - END_ZONE_DEPTH + 0.4
+  return {
+    x: clamp(point.x, 1.2, FIELD_WIDTH - 1.23),
+    y: clamp(point.y, yMin, yMax),
+  }
+}
+
+/** One light pass so a finger wiggle looks tidy while it is still being drawn. */
+export function smoothPreview(points: Point[]): Point[] {
+  if (points.length < 4) return points.map((point) => ({ ...point }))
+  const out: Point[] = [{ ...points[0] }]
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i]
+    const b = points[i + 1]
+    out.push({ x: a.x * 0.7 + b.x * 0.3, y: a.y * 0.7 + b.y * 0.3 })
+    out.push({ x: a.x * 0.3 + b.x * 0.7, y: a.y * 0.3 + b.y * 0.7 })
+  }
+  out.push({ ...points[points.length - 1] })
+  return out
+}
+
+const SNAP_ANGLES = [0, 45, 90, 135, 180, -45, -90, -135, -180]
+
+function angleDeltaDeg(a: number, b: number): number {
+  const raw = Math.abs(a - b) % 360
+  return raw > 180 ? 360 - raw : raw
+}
+
+/**
+ * Straight pieces within 12 degrees of level, upright, or diagonal snap to that angle.
+ * A break close to a whole yard snaps to it. Curved pieces are left alone.
+ */
+export function tidyStroke(
+  points: Point[],
+  curves: (Point | null)[],
+): { points: Point[]; curves: (Point | null)[] } {
+  const next = points.map((point) => ({ ...point }))
+  for (let i = 1; i < next.length; i++) {
+    if (curves[i - 1]) continue
+    const a = next[i - 1]
+    const b = next[i]
+    const len = Math.hypot(b.x - a.x, b.y - a.y)
+    if (len < 0.4) continue
+    const ang = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI
+    let best = ang
+    let delta = 99
+    for (const target of SNAP_ANGLES) {
+      const gap = angleDeltaDeg(ang, target)
+      if (gap < delta) {
+        delta = gap
+        best = target
+      }
+    }
+    if (delta > 12) continue
+    const rad = (best * Math.PI) / 180
+    let y = a.y + Math.sin(rad) * len
+    const yard = Math.round(y)
+    if (Math.abs(y - yard) <= 0.45) y = yard
+    next[i] = { x: a.x + Math.cos(rad) * len, y }
+  }
+  return { points: next, curves }
+}
+
 export function setStrokeCurve(stroke: Stroke, index: number, curve: Point | null): Stroke {
   return {
     ...stroke,

@@ -14,6 +14,7 @@ describe('add to home screen', () => {
         tourOpen: false,
         hasPlay: true,
         tourDone: true,
+        returning: true,
       }),
     ).toBe(false)
   })
@@ -26,8 +27,10 @@ describe('add to home screen', () => {
       tourOpen: false,
       hasPlay: true,
       tourDone: true,
+      returning: true,
     }
     expect(shouldShowInstallTip(ready)).toBe(true)
+    expect(shouldShowInstallTip({ ...ready, returning: false })).toBe(false)
     expect(shouldShowInstallTip({ ...ready, tourOpen: true })).toBe(false)
     expect(shouldShowInstallTip({ ...ready, tourDone: false })).toBe(false)
     expect(shouldShowInstallTip({ ...ready, dismissed: true })).toBe(false)

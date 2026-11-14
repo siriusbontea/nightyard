@@ -46,16 +46,16 @@ import { TipHost } from './TipHost'
 import { CoachTour } from './CoachTour'
 import { useAppUpdate } from '../useAppUpdate'
 import { UPDATE_READY } from '../updateGate'
-import { dismissInstallTip, installTipDismissed, isInstalled, promptInstall, shouldShowInstallTip, useInstallOffer } from '../install'
+import { dismissInstallTip, installTipDismissed, isInstalled, noteVisit, promptInstall, shouldShowInstallTip, useInstallOffer } from '../install'
 import { InstallGuide, InstallTip } from './InstallSheet'
 
 type Tool = 'move' | 'draw'
 type SheetId = null | 'book' | 'presets' | 'player' | 'more' | 'export' | 'play' | 'account' | 'playbook'
 const SPEEDS = [0.5, 1, 1.5] as const
 const SPEED_WORD: Record<(typeof SPEEDS)[number], string> = { 0.5: 'Slow', 1: 'Normal', 1.5: 'Fast' }
-const DRAW_WORD: Record<StrokeKind, string> = {
-  route: 'Draw a route',
-  motion: 'Move before the snap',
+const DRAW_SHORT: Record<StrokeKind, string> = {
+  route: 'Route',
+  motion: 'Walk',
   block: 'Block',
   run: 'Run',
 }
@@ -126,6 +126,14 @@ export function App() {
   const [promptDetail, setPromptDetail] = useState<string | null>(null)
   const [welcomeOn, setWelcomeOn] = useState(() => shouldShowWelcome(false, welcomeDismissed()))
   const [tourOn, setTourOn] = useState(false)
+  const [visit, setVisit] = useState(1)
+  const [neat, setNeat] = useState(() => {
+    try {
+      return globalThis.localStorage?.getItem('night-yard-neat') !== '0'
+    } catch {
+      return true
+    }
+  })
   const [savedOpen, setSavedOpen] = useState(false)
   const frameRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -240,9 +248,25 @@ export function App() {
   }, [book.accountName])
 
   useEffect(() => {
+    setVisit(noteVisit())
+  }, [])
+
+  useEffect(() => {
     if (!play || tipsSeen() || welcomeOn) return
     setTourOn(true)
   }, [play?.id, welcomeOn])
+
+  function toggleNeat() {
+    setNeat((value) => {
+      const next = !value
+      try {
+        globalThis.localStorage?.setItem('night-yard-neat', next ? '1' : '0')
+      } catch {
+        /* The choice lasts for this visit. */
+      }
+      return next
+    })
+  }
 
   function chooseTool(next: Tool) {
     setTool(next)
@@ -657,6 +681,7 @@ export function App() {
                 onStopPlayback={stopPlayback}
                 redrawPlayerId={redrawPlayerId}
                 onRedrawDone={() => setRedrawPlayerId(null)}
+                neat={neat}
               />
             </div>
           </div>
@@ -697,72 +722,50 @@ export function App() {
             selected: Boolean(selected),
           })}
         </p>
-        {tool === 'draw' ? (
-          <div class="coach">
-            <div class="kind-row">
-              {(play.format === '11v11' ? (['route', 'motion', 'block', 'run'] as StrokeKind[]) : (['route', 'motion', 'run'] as StrokeKind[])).map((kind) => (
-                <button key={kind} type="button" class="chip" aria-pressed={strokeKind === kind} {...tip(DRAW_TIP[kind])} onClick={() => setStrokeKind(kind)}>
-                  {DRAW_WORD[kind]}
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : selected && play.strokes.some((stroke) => stroke.playerId === selected.id) ? (
-          <div class="route-options">
-            {selected.side === 'defense' || play.format !== '11v11' ? null : (
-              <button type="button" class="chip" {...tip('Block in front')} onClick={() => assign(selected.id, 'block')}>
-                Block
+        <div class="action-slot">
+          {tool === 'draw' ? (
+            <>
+              <div class="kind-row">
+                {(play.format === '11v11' ? (['route', 'motion', 'block', 'run'] as StrokeKind[]) : (['route', 'motion', 'run'] as StrokeKind[])).map((kind) => (
+                  <button key={kind} type="button" class="chip" aria-pressed={strokeKind === kind} {...tip(DRAW_TIP[kind])} onClick={() => setStrokeKind(kind)}>
+                    {DRAW_SHORT[kind]}
+                  </button>
+                ))}
+              </div>
+              <button type="button" class="chip neat" aria-pressed={neat} data-tip="Straighten nearly straight lines" onClick={toggleNeat}>
+                Neat lines
               </button>
-            )}
-            <button
-              type="button"
-              class="chip"
-              {...tip('Draw a new path')}
-              onClick={() => {
-                setSelectedPlayerId(selected.id)
-                setRedrawPlayerId(selected.id)
-                setSheet(null)
-              }}
-            >
-              Redraw
+            </>
+          ) : selected && play.strokes.some((stroke) => stroke.playerId === selected.id) ? (
+            <div class="route-actions">
+              <button
+                type="button"
+                class="chip"
+                {...tip('Draw a new path')}
+                onClick={() => {
+                  setSelectedPlayerId(selected.id)
+                  setRedrawPlayerId(selected.id)
+                  setSheet(null)
+                }}
+              >
+                Redraw
+              </button>
+              <button type="button" class="chip" {...tip('Flip left/right')} onClick={() => applyBreak(breakSide === 'left' ? 'right' : 'left')}>
+                Flip
+              </button>
+              <button type="button" class="chip trash" {...tip('Remove this route')} onClick={() => dropRoute(selected.id)}>
+                <TrashIcon />
+                Delete
+              </button>
+            </div>
+          ) : selected ? (
+            <button type="button" class="chip" {...tip('Change this player')} onClick={() => setSheet('player')}>
+              Edit {selected.label}
             </button>
-            <button type="button" class="chip" {...tip('Flip this path')} onClick={() => applyBreak(breakSide === 'left' ? 'right' : 'left')}>
-              Flip
-            </button>
-            <button type="button" class="text-btn" {...tip('Change this player')} onClick={() => setSheet('player')}>
-              Edit
-            </button>
-          </div>
-        ) : selected ? (
-          <div class="edit-row">
-            <span class="who">
-              <i style={{ background: selected.color }} />
-              {selected.label}
-            </span>
-            <button type="button" class="text-btn" {...tip('Change this player')} onClick={() => setSheet('player')}>
-              Edit
-            </button>
-          </div>
-        ) : null}
-        {selected && play.strokes.some((stroke) => stroke.playerId === selected.id) ? (
-          <div class="route-bar">
-            <button type="button" class="route-remove" {...tip('Remove this route')} onClick={() => dropRoute(selected.id)}>
-              <TrashIcon />
-              Remove route
-            </button>
-            <button
-              type="button"
-              class="route-change"
-              {...tip('Change this path')}
-              onClick={() => {
-                setRedrawPlayerId(null)
-                setSheet('presets')
-              }}
-            >
-              Change
-            </button>
-          </div>
-        ) : null}
+          ) : (
+            <span class="action-empty">Pick a player on the field.</span>
+          )}
+        </div>
         <nav class="toolbar" aria-label="Tools">
           <button type="button" class="tool" data-tour="plays" {...tip('Open your plays')} onClick={() => { setRedrawPlayerId(null); setSheet('book') }}>
             <BookIcon />
@@ -1053,6 +1056,7 @@ export function App() {
         tourOpen: tourOn,
         hasPlay: true,
         tourDone: tipsSeen(),
+        returning: visit >= 2,
       }) ? (
         <InstallTip onShow={showInstallHelp} onLater={hideInstallTip} />
       ) : null}

@@ -61,8 +61,8 @@ export function PathPreview(props: { play: Play; player: Player; preset: PresetI
     <svg class="path-preview" viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
       <rect width={width} height={height} fill={NIGHT.turf[0]} />
       <line x1="0" y1={losY} x2={width} y2={losY} stroke={NIGHT.los} stroke-width="2" />
-      <path d={d} fill="none" stroke={outline} stroke-width="5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray={man ? '5 3.4' : dash} />
-      <path d={d} fill="none" stroke={color} stroke-width="3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray={man ? '5 3.4' : dash} />
+      <path d={d} fill="none" stroke={outline} stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray={man ? '7 6' : dash} />
+      <path d={d} fill="none" stroke={color} stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray={man ? '7 6' : dash} />
       {zone ? (
         <ellipse cx={end.x} cy={end.y} rx={zone.rx * SCALE * 0.72} ry={zone.ry * SCALE * 0.72} fill={color} fill-opacity="0.25" stroke={color} stroke-width="2" />
       ) : man ? null : kind === 'block' || props.preset === 'contain' ? (

@@ -83,7 +83,7 @@ export function renderExportSvg(play: Play, style: ExportStyle, options: ExportO
     `<text x="${margin}" y="${y}" fill="${theme.muted}" font-family="DM Sans, sans-serif" font-size="20">${escapeText(subtitle)}</text>`,
   )
   parts.push(`<g transform="translate(${fieldX.toFixed(1)} ${fieldY.toFixed(1)}) scale(${fit.toFixed(4)})">`)
-  parts.push(fieldMarkup({ play, camera, theme, showHandles: false }))
+  parts.push(fieldMarkup({ play, camera, theme, showHandles: false, pxPerUnit: fit }))
   parts.push('</g>')
 
   let textY = fieldY + fieldH + 36

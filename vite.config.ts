@@ -50,7 +50,7 @@ export default defineConfig(({ command }) => {
                 method,
               })),
               cleanupOutdatedCaches: true,
-              cacheId: 'night-yard-2',
+              cacheId: 'night-yard-3',
               // The new worker waits until the page asks it to take over, then claims open tabs.
               skipWaiting: false,
               clientsClaim: true,

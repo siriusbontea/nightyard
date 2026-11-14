@@ -1,11 +1,9 @@
 import { useEffect, useState } from 'preact/hooks'
 
 const STEPS = [
-  { selector: '.field-frame', text: 'Orange players are your team.' },
-  { selector: '.toolbar', text: 'Move, draw, and pick paths here.' },
+  { selector: '.field-frame', text: 'Orange players are your team. Drag one to move it.' },
   { selector: '[data-tour="draw"]', text: 'Tap Draw. Then drag from a player to draw a route.' },
-  { selector: '[data-tour="plays"]', text: 'Your plays save by themselves. Open them in Plays.' },
-  { selector: '.save-chip', text: 'This shows if the play is saved.' },
+  { selector: '[data-tour="plays"]', text: 'Your plays are in Plays. You can add one any time.' },
 ]
 
 export function CoachTour(props: { onDone: () => void }) {

@@ -47,7 +47,8 @@ export function shouldShowWelcome(signedIn: boolean, dismissed: boolean): boolea
   return !signedIn && !dismissed
 }
 
-/** Guests get one gentle prompt instead of writing. A saved book and a signed-in player do not. */
-export function saveNeedsAccount(guest: boolean, _action: SaveAction): boolean {
-  return guest
+/** Guests get one gentle prompt instead of writing. A new play stays on this phone with no account. */
+export function saveNeedsAccount(guest: boolean, action: SaveAction): boolean {
+  if (!guest) return false
+  return action !== 'new-play'
 }
