@@ -126,6 +126,19 @@ export function cameraForBox(widthPx: number, heightPx: number, los = DEFAULT_LO
   return { ahead, behind, scale }
 }
 
+/** Grow the window so every player is on screen, with a little grass around them. */
+export function cameraAroundPlayers(base: Camera, players: readonly { y: number }[]): Camera {
+  if (players.length === 0) return base
+  const pad = 3.5
+  const top = Math.max(...players.map((player) => player.y)) + pad
+  const bottom = Math.min(...players.map((player) => player.y)) - pad
+  return {
+    ...base,
+    ahead: Math.max(base.ahead, top),
+    behind: Math.max(base.behind, -bottom),
+  }
+}
+
 /**
  * Freehand tolerances in CSS pixels. Convert with `pixelsToYards` so a phone
  * and a desktop keep the same finger gesture.

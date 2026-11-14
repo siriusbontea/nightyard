@@ -1,11 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { DEFAULT_LOS } from '../fieldMarks'
-import { FIELD_WIDTH, cameraForBox } from '../geometry'
+import { cameraAroundPlayers, cameraForBox } from '../geometry'
 import {
   applyMan,
   applyPreset,
   ballLabel,
   ballXOf,
+  closerAim,
   defaultBreakSide,
   deleteStroke,
   flipPlay,
@@ -169,7 +170,8 @@ export function App() {
     const measure = () => {
       const rect = el.getBoundingClientRect()
       if (rect.width < 40 || rect.height < 40) return
-      setCamera(cameraForBox(rect.width, rect.height, play?.los ?? DEFAULT_LOS))
+      const fitted = cameraAroundPlayers(cameraForBox(rect.width, rect.height, play?.los ?? DEFAULT_LOS), play?.players ?? [])
+      setCamera(fitted)
     }
     measure()
     const observer = new ResizeObserver(measure)
@@ -711,7 +713,7 @@ export function App() {
                 onRedrawDone={() => setRedrawPlayerId(null)}
                 neat={neat}
                 zoom={closer ? 1.75 : 1}
-                zoomAt={zoomAt}
+                zoomAt={zoomAt ?? closerAim(play)}
                 onToggleZoom={(point) => {
                   setZoomAt(point)
                   setCloser((value) => !value)
@@ -725,7 +727,7 @@ export function App() {
               aria-pressed={closer}
               data-tip={closer ? 'Show the whole field' : 'See the players up close'}
               onClick={() => {
-                setZoomAt({ x: FIELD_WIDTH / 2, y: 0 })
+                setZoomAt(closerAim(play))
                 setCloser((value) => !value)
               }}
             >
@@ -733,9 +735,9 @@ export function App() {
             </button>
             {closer ? (
               <div class="zoom-sides" role="group" aria-label="Which part of the field">
-                <button type="button" onClick={() => setZoomAt({ x: FIELD_WIDTH * 0.22, y: zoomAt?.y ?? 0 })}>Left</button>
-                <button type="button" onClick={() => setZoomAt({ x: FIELD_WIDTH / 2, y: zoomAt?.y ?? 0 })}>Middle</button>
-                <button type="button" onClick={() => setZoomAt({ x: FIELD_WIDTH * 0.78, y: zoomAt?.y ?? 0 })}>Right</button>
+                <button type="button" onClick={() => setZoomAt(closerAim(play, 'left'))}>Left</button>
+                <button type="button" onClick={() => setZoomAt(closerAim(play, 'middle'))}>Middle</button>
+                <button type="button" onClick={() => setZoomAt(closerAim(play, 'right'))}>Right</button>
               </div>
             ) : null}
           </div>

@@ -571,7 +571,8 @@ export function fieldMarkup(options: {
     parts.push(`<line x1="${(w - tick).toFixed(1)}" y1="${y.toFixed(1)}" x2="${w}" y2="${y.toFixed(1)}" stroke="${stroke}" stroke-width="1.1"/>`)
   }
   parts.push(scrimmageMarkup(svgY(fieldYAt(play.los, play.los)).toFixed(2), w, scale, theme))
-  const ball = fieldToSvg({ x: FIELD_WIDTH / 2, y: -0.85 }, camera)
+  const snapper = play.players.find((player) => player.role === 'center') ?? play.players.find((player) => player.role === 'qb')
+  const ball = fieldToSvg({ x: snapper?.x ?? FIELD_WIDTH / 2, y: -0.85 }, camera)
   parts.push(ballMarkup(ball.x, ball.y, scale, theme.ballFill, theme.ballStroke))
   parts.push(yardNumbers(play.los, scale, ahead, h, theme))
   const pxPerUnit = options.pxPerUnit && options.pxPerUnit > 0 ? options.pxPerUnit : 1

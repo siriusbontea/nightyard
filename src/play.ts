@@ -1,7 +1,7 @@
 import { categoryOf } from './categories'
-import { DEFAULT_LOS, HASH_INSET } from './fieldMarks'
+import { DEFAULT_LOS } from './fieldMarks'
 import { OUR_COLOR, THEIR_COLOR, defenseFor, formationById, offenseFor, playerFromSpot, routeColorAt, shapeFor, specialDefense, type Spot } from './formations'
-import { FIELD_WIDTH, PLAYER_R, insideDir, pointOnStroke } from './geometry'
+import { FIELD_WIDTH, PLAYER_R, clamp, insideDir, pointOnStroke } from './geometry'
 import { migrateBuiltinLabels } from './labels'
 import { canRedo, canUndo, commit, createHistory, redo, undo, type History } from './history'
 import { uid } from './id'
@@ -89,7 +89,7 @@ function drawn(playerId: string, kind: StrokeKind, preset: PresetId | null, poin
 
 /** Goal-line bunch. A fresh book starts here. New play uses the 30. A book that already has plays is left alone. */
 export function corndogPlay(name = 'Corndog'): Play {
-  const ball = FIELD_WIDTH - HASH_INSET
+  const ball = FIELD_WIDTH / 2
   const line = -PLAYER_R
   const offLine = -PLAYER_R - 1.2
   const rush = PLAYER_R
@@ -104,9 +104,9 @@ export function corndogPlay(name = 'Corndog'): Play {
       { label: 'C', role: 'center', x: ball, y: line },
       { label: 'RG', role: 'ol', x: ball + 3.6, y: line },
       { label: 'RT', role: 'ol', x: ball + 6.9, y: line },
-      { label: 'TE', role: 'te', x: ball + 10.6, y: offLine },
-      { label: 'TE2', role: 'te', x: ball + 14, y: offLine },
-      { label: 'WR2', role: 'wr', x: ball + 17.4, y: line },
+      { label: 'TE', role: 'te', x: ball + 17, y: offLine },
+      { label: 'TE2', role: 'te', x: ball + 19.4, y: offLine },
+      { label: 'WR2', role: 'wr', x: ball + 21.6, y: line },
       { label: 'WR1', role: 'wr', x: 6.4, y: line },
       { label: 'QB', role: 'qb', x: ball, y: -5 },
       { label: 'RB', role: 'rb', x: ball + 3.5, y: -5.2 },
@@ -125,9 +125,9 @@ export function corndogPlay(name = 'Corndog'): Play {
       { label: 'LB2', role: 'lb', x: ball, y: 4.4 },
       { label: 'LB3', role: 'lb', x: ball + 7.2, y: 4.5 },
       { label: 'CB1', role: 'db', x: 6.4, y: 1.7 },
-      { label: 'SS', role: 'db', x: ball + 10.6, y: 1.8 },
+      { label: 'SS', role: 'db', x: ball + 16.2, y: 1.8 },
       { label: 'FS', role: 'db', x: ball + 3.2, y: 6.6 },
-      { label: 'CB2', role: 'db', x: ball + 14.6, y: 1.75 },
+      { label: 'CB2', role: 'db', x: ball + 20.2, y: 1.75 },
     ],
     'defense',
     false,
@@ -143,7 +143,7 @@ export function corndogPlay(name = 'Corndog'): Play {
   const tight = byLabel.TE2
   const z = byLabel.WR1
   const back = byLabel.RB
-  const snapX = x.x - 4.1
+  const snapX = x.x - 3.6
   play.strokes = [
     drawn(x.id, 'motion', 'motion', [
       { x: x.x, y: x.y },
@@ -161,9 +161,9 @@ export function corndogPlay(name = 'Corndog'): Play {
       [
         { x: y.x, y: y.y },
         { x: y.x + 0.3, y: 2.5 },
-        { x: y.x + 5.2, y: 6.3 },
+        { x: y.x + 1.8, y: 6.3 },
       ],
-      { x: y.x + 2.2, y: 5.1 },
+      { x: y.x + 0.6, y: 5.1 },
     ),
     drawn(tight.id, 'block', 'block', [
       { x: tight.x, y: tight.y },
@@ -376,6 +376,13 @@ export function ballXOf(play: Play): number {
   const center = play.players.find((player) => player.role === 'center')
   const qb = play.players.find((player) => player.role === 'qb')
   return center?.x ?? qb?.x ?? FIELD_WIDTH / 2
+}
+
+/** Where Closer looks. Middle is the ball, not the middle of the grass. */
+export function closerAim(play: Play, side: 'left' | 'middle' | 'right' = 'middle'): { x: number; y: number } {
+  const ball = ballXOf(play)
+  const shift = side === 'left' ? -12 : side === 'right' ? 12 : 0
+  return { x: clamp(ball + shift, 8, FIELD_WIDTH - 8), y: 0 }
 }
 
 export function applyPreset(play: Play, playerId: string, preset: PresetId, side?: BreakSide): Play {

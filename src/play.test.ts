@@ -30,6 +30,7 @@ import {
   serializePlay,
   serializePlaybook,
   serializePlaybookFile,
+  closerAim,
   showcasePlay,
   translatePlayer,
 } from './play'
@@ -74,9 +75,15 @@ describe('play model', () => {
     }
 
     const starter = showcasePlay()
-    const ballX = FIELD_WIDTH - 20
     const center = starter.players.find((player) => player.role === 'center')!
-    expect(Math.abs(center.x - ballX)).toBeLessThan(0.05)
+    expect(center.x).toBeCloseTo(midfield, 5)
+    expect(starter.players.find((player) => player.label === 'QB')!.x).toBeCloseTo(midfield, 5)
+    expect(closerAim(starter, 'middle').x).toBeCloseTo(center.x, 5)
+    const hashed = createPlay({ format: '11v11', formationId: 'trips-bunch' })
+    const hashCenter = hashed.players.find((player) => player.role === 'center')!
+    hashCenter.x = FIELD_WIDTH - 20
+    expect(closerAim(hashed, 'middle').x).toBeCloseTo(hashCenter.x, 5)
+    expect(closerAim(hashed, 'middle').x).not.toBeCloseTo(FIELD_WIDTH / 2, 0)
     for (const stroke of starter.strokes) {
       const samples = [...stroke.points, ...stroke.curves.filter((point): point is { x: number; y: number } => point !== null)]
       for (const point of samples) {

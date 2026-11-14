@@ -440,7 +440,7 @@ export function Field(props: FieldProps) {
       ref={svgRef}
       class="field"
       viewBox={`${viewX} ${viewY} ${viewW} ${viewH}`}
-      preserveAspectRatio="none"
+      preserveAspectRatio="xMidYMid meet"
       role="img"
       aria-label={`${props.play.name} field`}
     />
