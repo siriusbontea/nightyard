@@ -9,6 +9,7 @@ import type { BreakSide } from '../play'
 import type { Play, Player, PresetId } from '../types'
 import { FORMATS, formatShort, formatStyle, ourSideOf, type FormatId } from '../types'
 import { setUnsavedWork } from '../updateGate'
+import { APP_VERSION } from '../version'
 import { PathPreview } from './PathPreview'
 
 export function Sheet(props: {
@@ -560,7 +561,7 @@ export function MoreSheet(props: {
       <HeadKey />
       <a class="row-btn about-link" href="https://github.com/siriusbontea/nightyard" target="_blank" rel="noreferrer">
         About Night Yard
-        <small>A play designer you can learn without a grown-up. Version 1.2.2</small>
+        <small>A play designer you can learn without a grown-up. Version {APP_VERSION}. Free to share and change (GPL v2.0).</small>
       </a>
       <p class="fine">A free account saves plays on every device. Plays already on this phone stay here.</p>
     </Sheet>

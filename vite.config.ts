@@ -1,12 +1,18 @@
+import { readFileSync } from 'node:fs'
 import preact from '@preact/preset-vite'
 import { VitePWA } from 'vite-plugin-pwa'
 import { defineConfig } from 'vitest/config'
 import { isPocketBaseRequest, navigationAllowlist, normalizeBase } from './src/basePath.ts'
 
+const appVersion = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version as string
+
 export default defineConfig(({ command }) => {
   const base = normalizeBase(process.env.BASE_PATH, command === 'build' ? '/nightyard/' : '/')
   return {
     base,
+    define: {
+      __NY_VERSION__: JSON.stringify(appVersion),
+    },
     plugins: process.env.VITEST
       ? []
       : [
@@ -50,7 +56,7 @@ export default defineConfig(({ command }) => {
                 method,
               })),
               cleanupOutdatedCaches: true,
-              cacheId: 'night-yard-7',
+              cacheId: 'night-yard-8',
               // The new worker waits until the page asks it to take over, then claims open tabs.
               skipWaiting: false,
               clientsClaim: true,

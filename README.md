@@ -10,7 +10,7 @@ Play it live: **[https://www.roninforged.com/nightyard/](https://www.roninforged
 |---|---|
 | **Who it is for** | Kids, parents, and coaches |
 | **Formats** | Flag 5v5, 6v6, 7v7, 8v8, 9v9, and 11v11 tackle |
-| **License** | MIT ([LICENSE](LICENSE)) |
+| **License** | [GNU GPL v2.0](LICENSE) |
 | **Runs in** | A phone, tablet, or computer browser |
 | **Account** | Optional. Try it first. |
 
@@ -138,6 +138,6 @@ Drawing does not need a server. A free account is optional. When you make one, p
 
 ## Credits
 
-Made by Sirius Bontea.
+Made by Sirius Bontea. Night Yard is free software under the [GNU General Public License v2.0](LICENSE).
 
 Thanks to Bear for testing and ideas, including the flip feature.

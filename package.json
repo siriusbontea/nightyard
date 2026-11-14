@@ -1,6 +1,6 @@
 {
   "name": "night-yard",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "private": true,
   "description": "Night Yard is a phone-first football play designer.",
   "author": "Sirius Bontea",
@@ -18,7 +18,7 @@
     "type": "git",
     "url": "https://origin.cursor.com/git/siriusbontea/tmp-0b910bf3ac033a1c.git"
   },
-  "license": "ISC",
+  "license": "GPL-2.0-only",
   "dependencies": {
     "@fontsource/dm-sans": "^5.3.0",
     "@fontsource/graduate": "^5.3.0",
