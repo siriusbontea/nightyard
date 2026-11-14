@@ -21,4 +21,32 @@ describe('player tap size', () => {
     expect(hitTest(play, { x: 2.2, y: 0 }, radii, options)).toEqual({ type: 'player', id: first.id })
     expect(hitTest(play, { x: 4, y: 0 }, radii, options)).toEqual({ type: 'player', id: second.id })
   })
+
+  it('lets the player win when a route handle sits on the marker', () => {
+    const play = createPlay({ format: '5v5', name: 'Handle' })
+    const player = play.players[0]
+    player.x = 10
+    player.y = -4
+    play.strokes = [
+      {
+        id: 'line',
+        playerId: player.id,
+        kind: 'route',
+        preset: null,
+        points: [
+          { x: 10, y: -4 },
+          { x: 10, y: 2 },
+          { x: 16, y: 2 },
+        ],
+        curves: [null, null],
+      },
+    ]
+    const radii = { handle: 4, player: 3, stroke: 1, marker: 1.8, cornerBias: 2, minBend: 6 }
+    const hit = hitTest(play, { x: 10.2, y: -3.8 }, radii, {
+      showHandles: true,
+      selectedStrokeId: 'line',
+      preferPlayers: false,
+    })
+    expect(hit).toEqual({ type: 'player', id: player.id })
+  })
 })

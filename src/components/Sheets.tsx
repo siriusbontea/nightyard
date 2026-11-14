@@ -18,6 +18,11 @@ export function Sheet(props: {
   onClose: () => void
   children: ComponentChildren
 }) {
+  const [armed, setArmed] = useState(true)
+  useEffect(() => {
+    const timer = window.setTimeout(() => setArmed(false), 350)
+    return () => window.clearTimeout(timer)
+  }, [])
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') props.onClose()
@@ -27,7 +32,7 @@ export function Sheet(props: {
   }, [props.onClose])
 
   return (
-    <div class={props.noTips ? 'scrim no-tip' : 'scrim'} onClick={props.onClose}>
+    <div class={`${props.noTips ? 'scrim no-tip' : 'scrim'}${armed ? ' sheet-arming' : ''}`} onClick={props.onClose}>
       <div
         class={props.noTips ? 'sheet no-tip' : 'sheet'}
         role="dialog"
@@ -104,17 +109,6 @@ export function PlaySettings(props: { play: Play; onChange: (play: Play) => void
           onInput={(event) => {
             setUnsavedWork(true)
             setName((event.currentTarget as HTMLInputElement).value)
-          }}
-        />
-      </label>
-      <label class="field-label">
-        Lineup name
-        <input
-          value={formation}
-          maxLength={40}
-          onInput={(event) => {
-            setUnsavedWork(true)
-            setFormation((event.currentTarget as HTMLInputElement).value)
           }}
         />
       </label>
@@ -264,6 +258,29 @@ function LineupChoices(props: {
   )
 }
 
+function HeadKey() {
+  const items = [
+    { name: 'Arrow', words: 'Keep going', mark: 'arrow' },
+    { name: 'Dot', words: 'Stop', mark: 'dot' },
+    { name: 'Chevron', words: 'Before the snap', mark: 'chevron' },
+    { name: 'Bar', words: 'Block', mark: 'bar' },
+    { name: 'Diamond', words: 'Covers a player', mark: 'diamond' },
+  ]
+  return (
+    <div class="head-key" aria-label="What the ends mean">
+      <p class="field-label">What the ends mean</p>
+      <div class="head-key-row">
+        {items.map((item) => (
+          <span key={item.mark} class="head-key-item">
+            <i class={`head-mark ${item.mark}`} aria-hidden="true" />
+            <span>{item.words}</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export function PresetSheet(props: {
   play: Play
   selectedId: string | null
@@ -275,6 +292,7 @@ export function PresetSheet(props: {
   onRedraw: (playerId: string) => void
   onRemove: (playerId: string) => void
   onFlip: (playerId: string) => void
+  onAskCover?: () => void
   onClose: () => void
 }) {
   const visible = props.play.players.filter((player) => player.side === ourSideOf(props.play) || props.play.showDefense)
@@ -285,8 +303,10 @@ export function PresetSheet(props: {
   const jobs = selected ? assignmentsFor(selected, Boolean(formationById(props.play.format, props.play.formationId).special), props.play.format) : []
   const targets = selected ? props.play.players.filter((player) => player.side !== selected.side && (player.side === ourSideOf(props.play) || props.play.showDefense)) : []
   const hasLine = selected ? props.play.strokes.some((stroke) => stroke.playerId === selected.id) : false
+  const coverRef = useRef<HTMLDivElement>(null)
   return (
     <Sheet title="Paths" onClose={props.onClose}>
+      <HeadKey />
       <p class="field-label">Who</p>
       <div class="chips">
         {visible.map((player) => (
@@ -335,7 +355,12 @@ export function PresetSheet(props: {
                 aria-pressed={preset.id === highlighted}
                 onClick={() => {
                   setPicked({ playerId: selected.id, preset: preset.id })
-                  if (preset.id !== 'man') props.onApply(selected.id, preset.id)
+                  if (preset.id === 'man') {
+                    props.onAskCover?.()
+                    window.setTimeout(() => coverRef.current?.scrollIntoView({ block: 'start' }), 40)
+                    return
+                  }
+                  props.onApply(selected.id, preset.id)
                 }}
               >
                 <PathPreview play={props.play} player={selected} preset={preset.id} side={props.breakSide} />
@@ -345,7 +370,7 @@ export function PresetSheet(props: {
             ))}
           </div>
           {highlighted === 'man' ? (
-            <>
+            <div ref={coverRef}>
               <p class="field-label">Cover who?</p>
               <div class="chips">
                 {targets.map((player) => (
@@ -355,7 +380,7 @@ export function PresetSheet(props: {
                   </button>
                 ))}
               </div>
-            </>
+            </div>
           ) : null}
         </>
       ) : (
@@ -368,7 +393,7 @@ export function PresetSheet(props: {
 export function PlayerSheet(props: {
   play: Play
   player: Player
-  onChange: (player: Player) => void
+  onChange: (player: Player, reason?: 'position') => void
   onDeleteStroke: (id: string) => void
   onClose: () => void
 }) {
@@ -418,7 +443,7 @@ export function PlayerSheet(props: {
               onClick={() => {
                 const next = applyPosition(props.play, current(), option.id)
                 setLabel(next.label)
-                props.onChange(next)
+                props.onChange(next, 'position')
               }}
             >
               <span class={`mark ${shapeFor(option.role)} ${player.side === ourSideOf(props.play) ? 'ours' : 'theirs'}`}>
@@ -532,6 +557,11 @@ export function MoreSheet(props: {
       <button type="button" class="row-btn" onClick={props.onDuplicate}>
         Copy this play
       </button>
+      <HeadKey />
+      <a class="row-btn about-link" href="https://github.com/siriusbontea/nightyard" target="_blank" rel="noreferrer">
+        About Night Yard
+        <small>A play designer you can learn without a grown-up. Version 1.1.0</small>
+      </a>
       <p class="fine">A free account saves plays on every device. Plays already on this phone stay here.</p>
     </Sheet>
   )

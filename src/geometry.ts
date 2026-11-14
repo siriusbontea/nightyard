@@ -446,7 +446,7 @@ function angleDeltaDeg(a: number, b: number): number {
 }
 
 /**
- * Straight pieces within 12 degrees of level, upright, or diagonal snap to that angle.
+ * Straight pieces within 6 degrees of level, upright, or diagonal snap to that angle.
  * A break close to a whole yard snaps to it. Curved pieces are left alone.
  */
 export function tidyStroke(
@@ -470,7 +470,7 @@ export function tidyStroke(
         best = target
       }
     }
-    if (delta > 12) continue
+    if (delta > 6) continue
     const rad = (best * Math.PI) / 180
     let y = a.y + Math.sin(rad) * len
     const yard = Math.round(y)
@@ -478,6 +478,21 @@ export function tidyStroke(
     next[i] = { x: a.x + Math.cos(rad) * len, y }
   }
   return { points: next, curves }
+}
+
+/** Start a line on the edge of the marker so it does not cover the name. */
+export function strokeFromRim(stroke: Stroke, players: readonly Alignable[]): Stroke {
+  const owner = players.find((item) => item.id === stroke.playerId)
+  if (!owner || stroke.points.length < 2) return stroke
+  const center = plantedMarker(owner)
+  const next = stroke.points[1]
+  const dx = next.x - center.x
+  const dy = next.y - center.y
+  const len = Math.hypot(dx, dy)
+  const reach = markerReach(owner.shape) + 0.15
+  if (len <= reach + 0.2) return stroke
+  const rim = { x: center.x + (dx / len) * reach, y: center.y + (dy / len) * reach }
+  return { ...stroke, points: stroke.points.map((point, index) => (index === 0 ? rim : { ...point })) }
 }
 
 export function setStrokeCurve(stroke: Stroke, index: number, curve: Point | null): Stroke {

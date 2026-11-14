@@ -27,6 +27,10 @@ interface FieldProps {
   onRedrawDone?: () => void
   /** Snap nearly straight pieces. Off leaves the smoothed line as drawn. */
   neat?: boolean
+  /** 1 shows the whole field. Larger values zoom in without moving stored spots. */
+  zoom?: number
+  zoomAt?: Point | null
+  onToggleZoom?: (point: Point) => void
 }
 
 type Gesture =
@@ -70,6 +74,14 @@ export function Field(props: FieldProps) {
   const gesturing = useRef(false)
   propsRef.current = props
   const size = viewSize(props.camera)
+  const zoom = props.zoom && props.zoom > 1 ? props.zoom : 1
+  const focus = props.zoomAt ?? { x: FIELD_WIDTH / 2, y: 0 }
+  const viewW = size.w / zoom
+  const viewH = size.h / zoom
+  const focusX = focus.x * props.camera.scale
+  const focusY = (props.camera.ahead - focus.y) * props.camera.scale
+  const viewX = clamp(focusX - viewW / 2, 0, Math.max(0, size.w - viewW))
+  const viewY = clamp(focusY - viewH / 2, 0, Math.max(0, size.h - viewH))
 
   function paint(play: Play, showHandles: boolean, time = propsRef.current.playbackT) {
     const svg = svgRef.current
@@ -109,7 +121,7 @@ export function Field(props: FieldProps) {
     paint(props.play, showHandles)
     // paint reads the latest props ref; dependencies are the values that change the picture.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.play, props.camera, props.selectedPlayerId, props.selectedStrokeId, props.tool, props.playing, props.playbackT === 0])
+  }, [props.play, props.camera, props.selectedPlayerId, props.selectedStrokeId, props.tool, props.playing, props.playbackT === 0, props.zoom])
 
   useEffect(() => {
     if (gesturing.current) return
@@ -131,6 +143,9 @@ export function Field(props: FieldProps) {
     }
 
     let active: Gesture | null = null
+    let lastTapAt = 0
+    let lastTapPoint: Point | null = null
+    let openTimer = 0
 
     const onDown = (event: PointerEvent) => {
       if (event.pointerType === 'mouse' && event.button !== 0) return
@@ -153,11 +168,14 @@ export function Field(props: FieldProps) {
           handle: Math.max(1.15, yardsFor(window.matchMedia('(pointer: coarse)').matches ? 44 : 28)),
           player: playerHitYards(yardsFor),
           stroke: Math.max(1.05, yardsFor(18)),
+          marker: Math.max(1.7, yardsFor(18)),
+          cornerBias: yardsFor(30),
+          minBend: yardsFor(80),
         },
         {
-          showHandles: current.tool === 'move',
+          showHandles: current.tool === 'move' && !current.redrawPlayerId,
           selectedStrokeId: current.selectedStrokeId,
-          preferPlayers: current.tool === 'draw',
+          preferPlayers: current.tool === 'draw' || Boolean(current.redrawPlayerId),
         },
       )
       if (hit.type === 'handle') {
@@ -228,13 +246,27 @@ export function Field(props: FieldProps) {
           gesture.moved = true
         }
         if (gesture.raw.length < 2) return
-        const smoothed = smoothPreview(gesture.raw)
+        let draftPoints = smoothPreview(gesture.raw)
+        let draftCurves: (Point | null)[] = draftPoints.slice(1).map(() => null)
+        if (current.neat !== false && gesture.raw.length >= 3) {
+          const simple = simplifyPath(gesture.raw, Math.max(0.12, yardsFor(DRAW_PIXELS.epsilon)), {
+            cornerWindow: yardsFor(DRAW_PIXELS.cornerWindow),
+            cornerDegrees: DRAW_PIXELS.cornerDegrees,
+            minLeg: yardsFor(DRAW_PIXELS.minLeg),
+            maxPoints: DRAW_PIXELS.maxPoints,
+          })
+          if (simple.points.length >= 2) {
+            const tidy = tidyStroke(simple.points, simple.curves)
+            draftPoints = tidy.points
+            draftCurves = tidy.curves
+          }
+        }
         const draft: Stroke = {
           id: 'draft',
           playerId: gesture.playerId,
           kind: gesture.kind,
-          points: smoothed,
-          curves: smoothed.slice(1).map(() => null),
+          points: draftPoints,
+          curves: draftCurves,
           preset: null,
         }
         const preview = draft.kind === 'motion' ? setStroke(gesture.snapshot, draft) : replaceMainStroke(gesture.snapshot, draft)
@@ -309,8 +341,27 @@ export function Field(props: FieldProps) {
         if (!finished.moved || !finished.latest) {
           const already = current.selectedPlayerId === finished.playerId
           const lineId = primaryStrokeId(finished.snapshot, finished.playerId)
+          const now = Date.now()
+          if (lastTapPoint && now - lastTapAt < 320 && dist(lastTapPoint, finished.origin) < 1.5) {
+            window.clearTimeout(openTimer)
+            lastTapAt = 0
+            lastTapPoint = null
+            current.onToggleZoom?.(finished.origin)
+            current.onSelect(finished.playerId, lineId)
+            paint(finished.snapshot, true, 0)
+            return
+          }
+          lastTapAt = now
+          lastTapPoint = finished.origin
           current.onSelect(finished.playerId, lineId)
-          if (!lineId && tapOpensPosition(event.pointerType, already)) current.onEditPlayer(finished.playerId)
+          if (!lineId && tapOpensPosition(event.pointerType, already)) {
+            window.clearTimeout(openTimer)
+            const playerId = finished.playerId
+            openTimer = window.setTimeout(() => {
+              if (lastTapAt !== now) return
+              propsRef.current.onEditPlayer(playerId)
+            }, 300)
+          }
           paint(finished.snapshot, true, 0)
           return
         }
@@ -337,6 +388,7 @@ export function Field(props: FieldProps) {
     const blockMenu = (event: Event) => event.preventDefault()
     svg.addEventListener('contextmenu', blockMenu)
     return () => {
+      window.clearTimeout(openTimer)
       svg.removeEventListener('pointerdown', onDown)
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
@@ -349,7 +401,7 @@ export function Field(props: FieldProps) {
     <svg
       ref={svgRef}
       class="field"
-      viewBox={`0 0 ${size.w} ${size.h}`}
+      viewBox={`${viewX} ${viewY} ${viewW} ${viewH}`}
       preserveAspectRatio="none"
       role="img"
       aria-label={`${props.play.name} field`}

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks'
 import { DEFAULT_LOS } from '../fieldMarks'
-import { cameraForBox } from '../geometry'
+import { FIELD_WIDTH, cameraForBox } from '../geometry'
 import {
   applyMan,
   applyPreset,
@@ -55,10 +55,32 @@ const SPEEDS = [0.5, 1, 1.5] as const
 const SPEED_WORD: Record<(typeof SPEEDS)[number], string> = { 0.5: 'Slow', 1: 'Normal', 1.5: 'Fast' }
 const DRAW_SHORT: Record<StrokeKind, string> = {
   route: 'Route',
-  motion: 'Walk',
+  motion: 'Walk in',
   block: 'Block',
   run: 'Run',
 }
+function KindChoices(props: { format: Play['format']; strokeKind: StrokeKind; onPick: (kind: StrokeKind) => void }) {
+  const kinds = (props.format === '11v11' ? ['route', 'motion', 'block', 'run'] : ['route', 'motion', 'run']) as StrokeKind[]
+  return (
+    <div class="kind-row">
+      {kinds.map((kind) => (
+        <button key={kind} type="button" class="chip" aria-pressed={props.strokeKind === kind} {...tip(DRAW_TIP[kind])} onClick={() => props.onPick(kind)}>
+          {DRAW_SHORT[kind]}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function NeatSwitch(props: { on: boolean; onToggle: () => void }) {
+  return (
+    <button type="button" class="neat-switch" role="switch" aria-checked={props.on} data-tip="Straighten nearly straight lines" onClick={props.onToggle}>
+      <span class="switch-box" aria-hidden="true">{props.on ? '✓' : ''}</span>
+      Neat
+    </button>
+  )
+}
+
 const DRAW_TIP: Record<StrokeKind, string> = {
   route: 'Draw a route',
   motion: 'Move before the snap',
@@ -127,6 +149,8 @@ export function App() {
   const [welcomeOn, setWelcomeOn] = useState(() => shouldShowWelcome(false, welcomeDismissed()))
   const [tourOn, setTourOn] = useState(false)
   const [visit, setVisit] = useState(1)
+  const [closer, setCloser] = useState(false)
+  const [zoomAt, setZoomAt] = useState<{ x: number; y: number } | null>(null)
   const [neat, setNeat] = useState(() => {
     try {
       return globalThis.localStorage?.getItem('night-yard-neat') !== '0'
@@ -325,16 +349,19 @@ export function App() {
     const main = mainStroke(play, playerId)
     if (!main) return
     stopPlayback()
+    const flipped = () => book.notify('Flipped. Tap Undo.', () => book.undo())
     if (main.preset && isDirectionalPreset(main.preset)) {
       const next = applyPreset(play, playerId, main.preset, side)
       setSelectedStrokeId(mainStroke(next, playerId)?.id ?? null)
       book.update(next)
+      flipped()
       return
     }
     if (!main.preset) {
       const next = mirrorPlayerRoutes(play, playerId)
       setSelectedStrokeId(mainStroke(next, playerId)?.id ?? null)
       book.update(next)
+      flipped()
     }
   }
 
@@ -359,7 +386,7 @@ export function App() {
 
   function startNew() {
     if (book.plays.length > 0 && guestBlocked('new-play')) return
-    void book.create('11v11').then(() => {
+    void book.create(play?.format ?? '11v11', play?.los).then(() => {
       setSelectedPlayerId(null)
       setSelectedStrokeId(null)
       stopPlayback()
@@ -682,8 +709,26 @@ export function App() {
                 redrawPlayerId={redrawPlayerId}
                 onRedrawDone={() => setRedrawPlayerId(null)}
                 neat={neat}
+                zoom={closer ? 1.75 : 1}
+                zoomAt={zoomAt}
+                onToggleZoom={(point) => {
+                  setZoomAt(point)
+                  setCloser((value) => !value)
+                }}
               />
             </div>
+            <button
+              type="button"
+              class="zoom-btn"
+              aria-pressed={closer}
+              data-tip={closer ? 'Show the whole field' : 'See the players up close'}
+              onClick={() => {
+                setZoomAt({ x: FIELD_WIDTH / 2, y: 0 })
+                setCloser((value) => !value)
+              }}
+            >
+              {closer ? 'Whole field' : 'Closer'}
+            </button>
           </div>
         </div>
         <div class="playback" aria-label="Playback">
@@ -703,14 +748,13 @@ export function App() {
               setT(Number((event.currentTarget as HTMLInputElement).value) / 1000)
             }}
           />
-          <button
-            type="button"
-            class="speed"
-            {...tip('Change the speed')}
-            onClick={() => setSpeed(SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length])}
-          >
-            {SPEED_WORD[speed]}
-          </button>
+          <div class="speeds" role="group" aria-label="Speed">
+            {SPEEDS.map((value) => (
+              <button key={value} type="button" aria-pressed={speed === value} onClick={() => setSpeed(value)}>
+                {SPEED_WORD[value]}
+              </button>
+            ))}
+          </div>
         </div>
         <p class="hint">
           {fieldHint({
@@ -722,42 +766,41 @@ export function App() {
             selected: Boolean(selected),
           })}
         </p>
+        {tool === 'draw' && selected && play.strokes.some((stroke) => stroke.playerId === selected.id) ? (
+          <div class="kind-float">
+            <KindChoices format={play.format} strokeKind={strokeKind} onPick={setStrokeKind} />
+            <NeatSwitch on={neat} onToggle={toggleNeat} />
+          </div>
+        ) : null}
         <div class="action-slot">
-          {tool === 'draw' ? (
-            <>
-              <div class="kind-row">
-                {(play.format === '11v11' ? (['route', 'motion', 'block', 'run'] as StrokeKind[]) : (['route', 'motion', 'run'] as StrokeKind[])).map((kind) => (
-                  <button key={kind} type="button" class="chip" aria-pressed={strokeKind === kind} {...tip(DRAW_TIP[kind])} onClick={() => setStrokeKind(kind)}>
-                    {DRAW_SHORT[kind]}
-                  </button>
-                ))}
-              </div>
-              <button type="button" class="chip neat" aria-pressed={neat} data-tip="Straighten nearly straight lines" onClick={toggleNeat}>
-                Neat lines
-              </button>
-            </>
-          ) : selected && play.strokes.some((stroke) => stroke.playerId === selected.id) ? (
+          {selected && play.strokes.some((stroke) => stroke.playerId === selected.id) ? (
             <div class="route-actions">
               <button
                 type="button"
                 class="chip"
-                {...tip('Draw a new path')}
+                data-tip="Draw a new path"
                 onClick={() => {
                   setSelectedPlayerId(selected.id)
                   setRedrawPlayerId(selected.id)
                   setSheet(null)
+                  chooseTool('draw')
                 }}
               >
                 Redraw
               </button>
-              <button type="button" class="chip" {...tip('Flip left/right')} onClick={() => applyBreak(breakSide === 'left' ? 'right' : 'left')}>
+              <button type="button" class="chip" data-tip="Flip left/right" onClick={() => applyBreak(breakSide === 'left' ? 'right' : 'left')}>
                 Flip
               </button>
-              <button type="button" class="chip trash" {...tip('Remove this route')} onClick={() => dropRoute(selected.id)}>
+              <button type="button" class="chip trash" data-tip="Remove this route" onClick={() => dropRoute(selected.id)}>
                 <TrashIcon />
                 Delete
               </button>
             </div>
+          ) : tool === 'draw' ? (
+            <>
+              <KindChoices format={play.format} strokeKind={strokeKind} onPick={setStrokeKind} />
+              <NeatSwitch on={neat} onToggle={toggleNeat} />
+            </>
           ) : selected ? (
             <button type="button" class="chip" {...tip('Change this player')} onClick={() => setSheet('player')}>
               Edit {selected.label}
@@ -909,6 +952,7 @@ export function App() {
           }}
           onBreakSide={applyBreak}
           onApply={(playerId, preset) => assign(playerId, preset)}
+          onAskCover={() => book.notify('Tap who to cover.')}
           onMan={cover}
           onRedraw={(playerId) => {
             setSelectedPlayerId(playerId)
@@ -926,7 +970,10 @@ export function App() {
         <PlayerSheet
           play={play}
           player={selected}
-          onChange={(player) => book.update(updatePlayer(play, player.id, player))}
+          onChange={(player, reason) => {
+            book.update(updatePlayer(play, player.id, player))
+            if (reason === 'position') book.notify('Changed. Tap Undo.', () => book.undo())
+          }}
           onDeleteStroke={(id) => {
             book.update(deleteStroke(play, id))
             if (selectedStrokeId === id) setSelectedStrokeId(null)

@@ -22,6 +22,7 @@ export function createPlay(options: {
   formationId?: string
   name?: string
   id?: string
+  los?: number
 }): Play {
   const formation = formationById(options.format, options.formationId ?? formationById(options.format, '').id)
   const now = Date.now()
@@ -32,7 +33,7 @@ export function createPlay(options: {
     formation: formation.name,
     formationId: formation.id,
     format: options.format,
-    los: DEFAULT_LOS,
+    los: options.los ?? DEFAULT_LOS,
     category: formation.special ? 'Special teams' : 'Pass play',
     notes: '',
     ourSide: 'offense',

@@ -13,7 +13,7 @@ describe('field hints', () => {
 
   it('uses defender words on defense, and does not repeat the save chip for a guest', () => {
     expect(fieldHint({ ...base, defense: true })).toBe('Drag a defender to move. Tap one to change them.')
-    expect(fieldHint({ ...base, defense: true, tool: 'draw' })).toBe('Drag from a defender to draw a job.')
+    expect(fieldHint({ ...base, defense: true, tool: 'draw' })).toBe('Drag from a defender to show where they go.')
     expect(fieldHint({ ...base, defense: true, pathsOpen: true })).toBe('Pick a defender, then pick a job.')
     expect(fieldHint({ ...base, guest: true })).toBe('Drag a player to move. Tap a player to change them.')
     expect(fieldHint({ ...base, guest: true, tool: 'draw' })).toBe('Drag from a player to draw a route.')

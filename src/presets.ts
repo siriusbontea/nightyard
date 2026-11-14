@@ -51,8 +51,11 @@ export function isDefensePreset(preset: PresetId): boolean {
 export function assignmentsFor(player: Player, special = false, format?: FormatId): { id: PresetId; label: string; kind: StrokeKind }[] {
   if (special) return specialJobs(player)
   if (player.side !== 'defense') {
-    if (format && format !== '11v11') return ROUTE_PRESETS.filter((item) => item.id !== 'block')
-    return ROUTE_PRESETS
+    const routes = format && format !== '11v11' ? ROUTE_PRESETS.filter((item) => item.id !== 'block') : ROUTE_PRESETS
+    const blocker = player.role === 'ol' || player.role === 'center' || player.role === 'rb' || player.role === 'qb' || player.role === 'te'
+    if (!blocker) return routes
+    const block = routes.find((item) => item.id === 'block')
+    return block ? [block, ...routes.filter((item) => item.id !== 'block')] : routes
   }
   const order = player.role === 'dl' ? RUSH_FIRST : DEFENSE_PRESETS.map((item) => item.id)
   return order.map((id) => DEFENSE_PRESETS.find((item) => item.id === id)!).filter(Boolean)

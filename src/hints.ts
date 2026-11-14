@@ -11,7 +11,7 @@ export function fieldHint(input: {
     return input.defense ? 'Pick a defender, then pick a job.' : 'Pick a player, then pick a path.'
   }
   if (input.tool === 'draw') {
-    return input.defense ? 'Drag from a defender to draw a job.' : 'Drag from a player to draw a route.'
+    return input.defense ? 'Drag from a defender to show where they go.' : 'Drag from a player to draw a route.'
   }
   if (input.defense) {
     return input.selected ? 'Drag a defender to move it. Tap a line to bend it.' : 'Drag a defender to move. Tap one to change them.'

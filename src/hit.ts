@@ -1,4 +1,4 @@
-import { displayStroke, dist, distanceToStroke, plantedMarker } from './geometry'
+import { displayStroke, dist, distanceToStroke, markerReach, plantedMarker, segmentLength } from './geometry'
 import { isPlayerShown } from './play'
 import type { Play, Point } from './types'
 
@@ -18,19 +18,26 @@ export type Hit =
 export function hitTest(
   play: Play,
   point: Point,
-  radii: { handle: number; player: number; stroke: number },
+  radii: { handle: number; player: number; stroke: number; marker?: number; cornerBias?: number; minBend?: number },
   options: { showHandles: boolean; selectedStrokeId: string | null; preferPlayers: boolean },
 ): Hit {
-  const handle = options.showHandles ? nearestHandle(play, point, radii.handle, options.selectedStrokeId) : null
-  if (handle && !options.preferPlayers) return handle
   let nearestPlayer: { id: string; distance: number } | null = null
+  let onMarker: { id: string; distance: number } | null = null
   for (const player of play.players) {
     if (!isPlayerShown(play, player)) continue
     const distance = dist(point, plantedMarker(player))
+    const body = radii.marker ?? markerReach(player.shape)
+    if (distance <= body && (!onMarker || distance < onMarker.distance)) onMarker = { id: player.id, distance }
     if (distance <= radii.player && (!nearestPlayer || distance < nearestPlayer.distance)) {
       nearestPlayer = { id: player.id, distance }
     }
   }
+  // A finger on the marker itself is always that player, even if a route handle is closer.
+  if (onMarker) return { type: 'player', id: onMarker.id }
+  const handle = options.showHandles
+    ? nearestHandle(play, point, radii.handle, options.selectedStrokeId, radii.cornerBias ?? 0, radii.minBend ?? 0)
+    : null
+  if (handle && !options.preferPlayers) return handle
   if (nearestPlayer) return { type: 'player', id: nearestPlayer.id }
   if (handle) return handle
   let nearestStroke: { id: string; distance: number } | null = null
@@ -46,34 +53,45 @@ export function hitTest(
   return { type: 'field' }
 }
 
-function nearestHandle(play: Play, point: Point, radius: number, strokeId: string | null): Hit | null {
+function nearestHandle(
+  play: Play,
+  point: Point,
+  radius: number,
+  strokeId: string | null,
+  cornerBias: number,
+  minBend: number,
+): Hit | null {
   const stored = play.strokes.find((item) => item.id === strokeId)
   if (!stored) return null
   const stroke = displayStroke(stored, play.players)
-  let bestDistance = radius
-  let bestHit: Hit | null = null
-  const consider = (distance: number, hit: Hit) => {
-    if (distance <= bestDistance) {
-      bestDistance = distance
-      bestHit = hit
-    }
+  const best: { point: { distance: number; hit: Hit } | null; bend: { distance: number; hit: Hit } | null } = {
+    point: null,
+    bend: null,
+  }
+  const keep = (slot: 'point' | 'bend', distance: number, hit: Hit) => {
+    if (distance > radius) return
+    const current = best[slot]
+    if (!current || distance < current.distance) best[slot] = { distance, hit }
   }
   for (let i = 1; i < stroke.points.length; i++) {
-    consider(dist(point, stroke.points[i]), { type: 'handle', kind: 'point', strokeId: stroke.id, index: i })
+    keep('point', dist(point, stroke.points[i]), { type: 'handle', kind: 'point', strokeId: stroke.id, index: i })
   }
   for (let i = 0; i < stroke.points.length - 1; i++) {
-    const curve = stroke.curves[i]
-    if (curve) {
-      consider(dist(point, curve), { type: 'handle', kind: 'curve', strokeId: stroke.id, index: i })
-    } else {
-      const mid = {
-        x: (stroke.points[i].x + stroke.points[i + 1].x) / 2,
-        y: (stroke.points[i].y + stroke.points[i + 1].y) / 2,
-      }
-      consider(dist(point, mid), { type: 'handle', kind: 'bend', strokeId: stroke.id, index: i })
-    }
+    const a = stroke.points[i]
+    const b = stroke.points[i + 1]
+    const curve = stroke.curves[i] ?? null
+    if (minBend > 0 && segmentLength(a, b, curve) < minBend) continue
+    const at = curve ?? { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
+    keep('bend', dist(point, at), {
+      type: 'handle',
+      kind: curve ? 'curve' : 'bend',
+      strokeId: stroke.id,
+      index: i,
+    })
   }
-  return bestHit
+  if (best.point && cornerBias > 0 && best.point.distance <= cornerBias) return best.point.hit
+  if (best.point && best.bend) return best.point.distance <= best.bend.distance ? best.point.hit : best.bend.hit
+  return best.point?.hit ?? best.bend?.hit ?? null
 }
 
 export function clientToField(svg: SVGSVGElement, clientX: number, clientY: number, camera: { ahead: number; scale: number }): Point {

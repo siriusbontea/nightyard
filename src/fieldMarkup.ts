@@ -1,7 +1,7 @@
 import { ballMarkup } from './ball'
 import { COLOR_ART, END_ZONE_COLOR, END_ZONE_LINE, LINE_ART, placeEndZoneLogo } from './endZoneArt'
 import { END_ZONE_DEPTH, FIELD_LENGTH, HASH_INSET, displayedYard, fieldYAt, numberArrow } from './fieldMarks'
-import { FIELD_WIDTH, PLAYER_R, displayStroke, fieldToSvg, plantedMarker, segmentLength, segmentTangent, viewSize, type Camera } from './geometry'
+import { FIELD_WIDTH, PLAYER_R, displayStroke, dist, fieldToSvg, markerReach, plantedMarker, segmentLength, segmentTangent, strokeFromRim, viewSize, type Camera } from './geometry'
 import { isPlayerShown } from './play'
 import { isZonePreset, zoneRadius } from './presets'
 import { routeInk, type RouteInk } from './routeStyle'
@@ -173,10 +173,24 @@ function headMarkup(kind: HeadKind, tip: Point, dir: Point, ink: RouteInk, color
     <path d="${d}" fill="${color}" stroke="${color}" stroke-width="${corner}" stroke-linejoin="round"/>`
 }
 
+function keepTipOnField(tip: Point, dir: Point, pad: number, width: number, height: number): Point {
+  const len = Math.hypot(dir.x, dir.y) || 1
+  const ux = dir.x / len
+  const uy = dir.y / len
+  let x = tip.x
+  let y = tip.y
+  for (let step = 0; step < 12; step++) {
+    if (x >= pad && x <= width - pad && y >= pad && y <= height - pad) break
+    x -= ux * pad * 0.35
+    y -= uy * pad * 0.35
+  }
+  return { x, y }
+}
+
 function routeParts(stroke: Stroke, play: Play, camera: Camera, theme: Theme, selected: boolean, dim: boolean, pxPerUnit: number): { body: string; head: string } {
-  const shown = displayStroke(stroke, play.players)
+  const shown = strokeFromRim(displayStroke(stroke, play.players), play.players)
   if (shown.points.length < 2) return { body: '', head: '' }
-  const { w } = viewSize(camera)
+  const { w, h } = viewSize(camera)
   const ink = routeInk(pxPerUnit, pxPerUnit * w, false)
   const weight = selected ? 1.25 : 1
   const color = routeColor(shown, play, theme)
@@ -186,22 +200,16 @@ function routeParts(stroke: Stroke, play: Play, camera: Camera, theme: Theme, se
   const prev = shown.points[shown.points.length - 2]
   const fieldDir = segmentTangent(prev, end, shown.curves[shown.curves.length - 1] ?? null, 1)
   const dir = { x: fieldDir.x, y: -fieldDir.y }
-  const tip = fieldToSvg(end, camera)
+  const tip = keepTipOnField(fieldToSvg(end, camera), dir, ink.head * 0.55, w, h)
   const trimYards = kind === 'zone' ? 0 : ink.trim / camera.scale
   const bodyStroke = trimStroke(shown, trimYards)
   const d = pathD(bodyStroke, camera)
   const dashed = shown.kind === 'motion'
   const dash = dashed ? ` stroke-dasharray="${ink.motionOn.toFixed(2)} ${ink.motionOff.toFixed(2)}"` : ''
-  const cap = dashed ? 'butt' : 'butt'
   const opacity = dim ? ' opacity="0.65"' : ''
   const start = fieldToSvg(bodyStroke.points[0], camera)
   const haloW = ((ink.stroke + ink.halo * 2) * weight).toFixed(2)
   const innerW = (ink.stroke * weight).toFixed(2)
-  const startR = (ink.stroke * weight) / 2
-  const startCap = dashed
-    ? ''
-    : `<circle cx="${start.x.toFixed(2)}" cy="${start.y.toFixed(2)}" r="${(startR + ink.halo).toFixed(2)}" fill="${halo}"/>
-      <circle cx="${start.x.toFixed(2)}" cy="${start.y.toFixed(2)}" r="${startR.toFixed(2)}" fill="${color}"/>`
   const highlight = selected
     ? `<path d="${d}" fill="none" stroke="#ffffff" stroke-width="${ink.highlight.toFixed(2)}" stroke-linecap="butt" stroke-linejoin="round"${dash} opacity="0.9"/>`
     : ''
@@ -221,34 +229,49 @@ function routeParts(stroke: Stroke, play: Play, camera: Camera, theme: Theme, se
   const attrs = `${shown.preset ? ` data-preset="${shown.preset}"` : ''}${isZonePreset(shown.preset) ? ' data-zone="1"' : ''}${opacity}`
   return {
     body: `<g data-layer="route" data-stroke-id="${shown.id}"${attrs}>
-      <path d="${d}" fill="none" stroke="${halo}" stroke-width="${haloW}" stroke-linecap="${cap}" stroke-linejoin="round"${dash} stroke-opacity="0.55"/>
-      <path d="${d}" fill="none" stroke="${color}" stroke-width="${innerW}" stroke-linecap="${cap}" stroke-linejoin="round"${dash}/>
-      ${startCap}${highlight}${ball}
+      <path d="${d}" fill="none" stroke="${halo}" stroke-width="${haloW}" stroke-linecap="butt" stroke-linejoin="round"${dash} stroke-opacity="0.55"/>
+      <path d="${d}" fill="none" stroke="${color}" stroke-width="${innerW}" stroke-linecap="butt" stroke-linejoin="round"${dash}/>
+      ${highlight}${ball}
     </g>`,
     head: `<g data-layer="head" data-stroke-id="${shown.id}"${attrs}>${head}</g>`,
   }
 }
 
-function handlesMarkup(stroke: Stroke, camera: Camera, pxPerUnit: number, coarse: boolean): string {
+function clearOfMarkers(point: Point, play: Play): Point {
+  let next = { ...point }
+  for (const player of play.players) {
+    const center = plantedMarker(player)
+    const gap = markerReach(player.shape) + 0.7
+    const distance = dist(next, center)
+    if (distance >= gap || distance < 0.01) continue
+    next = {
+      x: center.x + ((next.x - center.x) / distance) * gap,
+      y: center.y + ((next.y - center.y) / distance) * gap,
+    }
+  }
+  return next
+}
+
+function handlesMarkup(stroke: Stroke, play: Play, camera: Camera, pxPerUnit: number, coarse: boolean): string {
   const { w } = viewSize(camera)
   const ink = routeInk(pxPerUnit, pxPerUnit * w, coarse)
   const parts: string[] = []
   const ring = Math.max(1.2, ink.handle * 0.18)
+  const pxPerYard = pxPerUnit * camera.scale
   for (let i = 1; i < stroke.points.length; i++) {
-    const point = fieldToSvg(stroke.points[i], camera)
+    const point = fieldToSvg(clearOfMarkers(stroke.points[i], play), camera)
     parts.push(
       `<circle cx="${point.x.toFixed(1)}" cy="${point.y.toFixed(1)}" r="${ink.handle.toFixed(2)}" fill="#ffffff" stroke="#140E0C" stroke-width="${ring.toFixed(2)}"/>
       <circle cx="${point.x.toFixed(1)}" cy="${point.y.toFixed(1)}" r="${(ink.handle + ring).toFixed(2)}" fill="none" stroke="#ffffff" stroke-width="${(ring * 0.7).toFixed(2)}"/>`,
     )
   }
   for (let i = 0; i < stroke.points.length - 1; i++) {
-    const curve = stroke.curves[i]
-    const at = curve
-      ? fieldToSvg(curve, camera)
-      : fieldToSvg(
-          { x: (stroke.points[i].x + stroke.points[i + 1].x) / 2, y: (stroke.points[i].y + stroke.points[i + 1].y) / 2 },
-          camera,
-        )
+    const a = stroke.points[i]
+    const b = stroke.points[i + 1]
+    const curve = stroke.curves[i] ?? null
+    if (dist(a, b) * pxPerYard < 80) continue
+    const mid = clearOfMarkers(curve ?? { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, play)
+    const at = fieldToSvg(mid, camera)
     const r = ink.midHandle
     parts.push(
       `<circle cx="${at.x.toFixed(1)}" cy="${at.y.toFixed(1)}" r="${r.toFixed(2)}" fill="#ffffff" stroke="${ACCENT}" stroke-width="${ring.toFixed(2)}"/>
@@ -287,7 +310,7 @@ export function labelFontSize(label: string, radius: number, shape: Player['shap
   return Math.min(fromWidth, fromHeight)
 }
 
-function playerMarkup(player: Player, play: Play, camera: Camera, theme: Theme, selected: boolean, pxPerUnit: number, drawReady: boolean): string {
+function playerMarkup(player: Player, play: Play, camera: Camera, theme: Theme, selected: boolean, pxPerUnit: number, drawReady: boolean): { shape: string; label: string } {
   const pos = fieldToSvg(plantedMarker(player), camera)
   const radius = PLAYER_R * camera.scale
   const fill = theme.outlineOnly ? '#ffffff' : safeColor(player.color)
@@ -311,14 +334,20 @@ function playerMarkup(player: Player, play: Play, camera: Camera, theme: Theme, 
     : ''
   const minLabel = 12 / Math.max(pxPerUnit, 0.04)
   const size = Math.max(labelFontSize(player.label, radius, player.shape), Math.min(minLabel, radius * 1.05))
-  const label = `<text x="0" y="0" fill="${labelInk(fill)}" font-family="Oswald, Impact, sans-serif" font-size="${size.toFixed(1)}" font-weight="600" text-anchor="middle" dominant-baseline="central">${escapeXml(player.label)}</text>`
+  const haloPx = Math.max(1.1, 1.5 / Math.max(pxPerUnit, 0.04))
+  const label = `<text x="0" y="0" fill="${labelInk(fill)}" stroke="#0c1220" stroke-width="${haloPx.toFixed(2)}" paint-order="stroke" font-family="Oswald, Impact, sans-serif" font-size="${size.toFixed(1)}" font-weight="600" text-anchor="middle" dominant-baseline="central">${escapeXml(player.label)}</text>`
   let badge = ''
   if (player.read && player.side === ourSideOf(play)) {
     const bx = radius * 0.82
     const by = -radius * 0.82
     badge = `<g transform="translate(${bx.toFixed(1)} ${by.toFixed(1)})"><circle r="9.5" fill="${theme.badgeFill}" stroke="${theme.badgeStroke}" stroke-width="1.6"/><text fill="${theme.badgeText}" font-family="Oswald, Impact, sans-serif" font-size="12" font-weight="600" text-anchor="middle" dominant-baseline="central">${player.read}</text></g>`
   }
-  return `<g data-player-id="${escapeXml(player.id)}" transform="translate(${pos.x.toFixed(2)} ${pos.y.toFixed(2)})">${ready}${ring}${shape}${label}${badge}</g>`
+  const at = `translate(${pos.x.toFixed(2)} ${pos.y.toFixed(2)})`
+  const id = escapeXml(player.id)
+  return {
+    shape: `<g data-player-id="${id}" transform="${at}">${ready}${ring}${shape}</g>`,
+    label: `<g data-layer="label" data-player-id="${id}" transform="${at}">${label}${badge}</g>`,
+  }
 }
 
 function yardArrow(x: number, y: number, dir: 'up' | 'down', scale: number): string {
@@ -486,16 +515,20 @@ export function fieldMarkup(options: {
     ...play.players.filter((player) => player.side !== ourSideOf(play) && play.showDefense),
     ...play.players.filter((player) => player.side === ourSideOf(play)),
   ]
+  const labels: string[] = []
   for (const player of ordered) {
     const hasLine = play.strokes.some((stroke) => stroke.playerId === player.id)
     const drawReady = Boolean(options.drawMode) && player.side === ourSideOf(play) && !hasLine
-    parts.push(playerMarkup(player, play, camera, theme, player.id === options.selectedPlayerId, pxPerUnit, drawReady))
+    const drawnPlayer = playerMarkup(player, play, camera, theme, player.id === options.selectedPlayerId, pxPerUnit, drawReady)
+    parts.push(drawnPlayer.shape)
+    labels.push(drawnPlayer.label)
   }
   for (const piece of drawn) parts.push(piece.body)
   for (const piece of drawn) parts.push(piece.head)
+  parts.push(...labels)
   if (options.showHandles && options.selectedStrokeId) {
     const selected = play.strokes.find((stroke) => stroke.id === options.selectedStrokeId)
-    if (selected) parts.push(handlesMarkup(displayStroke(selected, play.players), camera, pxPerUnit, Boolean(options.coarse)))
+    if (selected) parts.push(handlesMarkup(displayStroke(selected, play.players), play, camera, pxPerUnit, Boolean(options.coarse)))
   }
   parts.push(`<rect x="1.2" y="1.2" width="${w - 2.4}" height="${h - 2.4}" fill="none" stroke="${theme.line}" stroke-width="2"/>`)
   parts.push('</g>')
@@ -504,11 +537,12 @@ export function fieldMarkup(options: {
 
 export function applyPositions(svg: SVGSVGElement, play: Play, positions: Map<string, Point>, camera: Camera): void {
   for (const player of play.players) {
-    const el = svg.querySelector(`[data-player-id="${cssEscape(player.id)}"]`)
-    if (!el) continue
     const at = positions.get(player.id) ?? { x: player.x, y: player.y }
     const pos = fieldToSvg(at, camera)
-    el.setAttribute('transform', `translate(${pos.x.toFixed(2)} ${pos.y.toFixed(2)})`)
+    const transform = `translate(${pos.x.toFixed(2)} ${pos.y.toFixed(2)})`
+    for (const el of svg.querySelectorAll(`[data-player-id="${cssEscape(player.id)}"]`)) {
+      el.setAttribute('transform', transform)
+    }
   }
 }
 

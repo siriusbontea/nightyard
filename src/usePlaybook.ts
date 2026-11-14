@@ -405,7 +405,7 @@ export function usePlaybook() {
     setHistory(next)
   }
 
-  async function create(format: FormatId = '11v11') {
+  async function create(format: FormatId = '11v11', los?: number) {
     if (!keepsLocal()) setUnsavedWork(true)
     const bookId = currentIdRef.current || booksRef.current[0]?.id
     if (!bookId) return
@@ -413,6 +413,7 @@ export function usePlaybook() {
       format,
       formationId: format === '11v11' ? 'shotgun-trips' : undefined,
       name: freshPlayName(format, visiblePlays(playsRef.current, bookId)),
+      los,
     })
     created.bookId = bookId
     let failed = false
