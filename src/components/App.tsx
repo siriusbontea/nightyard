@@ -372,6 +372,7 @@ export function App() {
     setSelectedPlayerId(playerId)
     setSelectedStrokeId(mainStroke(next, playerId)?.id ?? null)
     book.update(next)
+    book.clearToast()
   }
 
   function addBook() {

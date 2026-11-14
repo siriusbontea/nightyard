@@ -178,7 +178,6 @@ export function Field(props: FieldProps) {
           player: playerHitYards(yardsFor),
           stroke: Math.max(1.05, yardsFor(18)),
           marker: Math.max(1.7, yardsFor(18)),
-          cornerBias: yardsFor(30),
           minBend: yardsFor(56),
         },
         {

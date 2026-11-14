@@ -18,7 +18,7 @@ export type Hit =
 export function hitTest(
   play: Play,
   point: Point,
-  radii: { handle: number; player: number; stroke: number; marker?: number; cornerBias?: number; minBend?: number },
+  radii: { handle: number; player: number; stroke: number; marker?: number; minBend?: number },
   options: { showHandles: boolean; selectedStrokeId: string | null; preferPlayers: boolean },
 ): Hit {
   let nearestPlayer: { id: string; distance: number } | null = null
@@ -35,7 +35,7 @@ export function hitTest(
   // A finger on the marker itself is always that player, even if a route handle is closer.
   if (onMarker) return { type: 'player', id: onMarker.id }
   const handle = options.showHandles
-    ? nearestHandle(play, point, radii.handle, options.selectedStrokeId, radii.cornerBias ?? 0, radii.minBend ?? 0)
+    ? nearestHandle(play, point, radii.handle, options.selectedStrokeId, radii.minBend ?? 0)
     : null
   if (handle && !options.preferPlayers) return handle
   if (nearestPlayer) return { type: 'player', id: nearestPlayer.id }
@@ -53,14 +53,7 @@ export function hitTest(
   return { type: 'field' }
 }
 
-function nearestHandle(
-  play: Play,
-  point: Point,
-  radius: number,
-  strokeId: string | null,
-  cornerBias: number,
-  minBend: number,
-): Hit | null {
+function nearestHandle(play: Play, point: Point, radius: number, strokeId: string | null, minBend: number): Hit | null {
   const stored = play.strokes.find((item) => item.id === strokeId)
   if (!stored) return null
   const stroke = displayStroke(stored, play.players)
@@ -89,8 +82,8 @@ function nearestHandle(
       index: i,
     })
   }
-  if (best.point && cornerBias > 0 && best.point.distance <= cornerBias) return best.point.hit
-  if (best.point && best.bend) return best.point.distance <= best.bend.distance ? best.point.hit : best.bend.hit
+  // The handle under the finger wins. A tie goes to the bend, so a short leg can still curve.
+  if (best.point && best.bend) return best.bend.distance <= best.point.distance ? best.bend.hit : best.point.hit
   return best.point?.hit ?? best.bend?.hit ?? null
 }
 

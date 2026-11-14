@@ -41,12 +41,46 @@ describe('player tap size', () => {
         curves: [null, null],
       },
     ]
-    const radii = { handle: 4, player: 3, stroke: 1, marker: 1.8, cornerBias: 2, minBend: 6 }
+    const radii = { handle: 4, player: 3, stroke: 1, marker: 1.8, minBend: 6 }
     const hit = hitTest(play, { x: 10.2, y: -3.8 }, radii, {
       showHandles: true,
       selectedStrokeId: 'line',
       preferPlayers: false,
     })
     expect(hit).toEqual({ type: 'player', id: player.id })
+  })
+
+  it('bends a short leg when the finger is nearer the plus than the corner', () => {
+    const play = createPlay({ format: '7v7', name: 'Bend' })
+    const player = play.players[0]
+    player.x = 20
+    player.y = -6
+    play.strokes = [
+      {
+        id: 'line',
+        playerId: player.id,
+        kind: 'route',
+        preset: null,
+        points: [
+          { x: 20, y: -6 },
+          { x: 20, y: 3 },
+        ],
+        curves: [null],
+      },
+    ]
+    // A 9-yard leg. The plus is in the middle. The corner's big hit circle still reaches it.
+    const radii = { handle: 6.5, player: 2, stroke: 1, marker: 0.5, minBend: 1 }
+    const onPlus = hitTest(play, { x: 20.15, y: -1.5 }, radii, {
+      showHandles: true,
+      selectedStrokeId: 'line',
+      preferPlayers: false,
+    })
+    expect(onPlus).toMatchObject({ type: 'handle', kind: 'bend', index: 0 })
+    const tie = hitTest(play, { x: 21, y: 0.75 }, radii, {
+      showHandles: true,
+      selectedStrokeId: 'line',
+      preferPlayers: false,
+    })
+    expect(tie).toMatchObject({ type: 'handle', kind: 'bend' })
   })
 })

@@ -108,6 +108,12 @@ export function usePlaybook() {
     setUndoHold(Boolean(undo))
   }
 
+  function clearToast() {
+    setToast(null)
+    setToastUndo(null)
+    setUndoHold(false)
+  }
+
   function maybeAutosaveTip() {
     if (tipped.current || guestRef.current || !getSyncState().signedIn) return
     tipped.current = true
@@ -856,6 +862,7 @@ export function usePlaybook() {
     syncStatus: saveChip(saved, account, online, guest).label,
     saveKind: saveChip(saved, account, online, guest).kind,
     notify,
+    clearToast,
     flushSave,
     countInBook: (id: string) => plays.filter((item) => item.bookId === id).length,
     canUndo: history ? canUndo(history) : false,

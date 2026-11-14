@@ -11,7 +11,7 @@ describe('service worker', () => {
     expect(source).toContain('skipWaiting: false')
     expect(source).toContain('clientsClaim: true')
     expect(source).toContain('cleanupOutdatedCaches: true')
-    expect(source).toContain("cacheId: 'night-yard-5'")
+    expect(source).toContain("cacheId: 'night-yard-6'")
     expect(source).toContain("theme_color: '#F9682D'")
     expect(source).toContain("background_color: '#191919'")
     expect(source).toContain('icon-maskable-192.png')

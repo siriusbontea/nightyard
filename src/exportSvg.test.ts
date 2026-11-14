@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { renderExportSvg, wrapText } from './exportSvg'
+import { exportFooter, renderExportSvg, wrapText } from './exportSvg'
 import { createPlay, showcasePlay } from './play'
 import { COLOR_TURF_A } from './theme'
 
@@ -31,5 +31,12 @@ describe('export svg', () => {
     expect(svg).toContain('>QB<')
     expect(svg).toContain('>LT<')
     expect(svg).toContain('11v11 tackle')
+  })
+
+  it('skips the default playbook name in the footer', () => {
+    expect(exportFooter()).toBe('NIGHT YARD')
+    expect(exportFooter('Night Yard')).toBe('NIGHT YARD')
+    expect(exportFooter('  night yard ')).toBe('NIGHT YARD')
+    expect(exportFooter('Dawgs')).toBe('NIGHT YARD · Dawgs')
   })
 })

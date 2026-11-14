@@ -44,7 +44,8 @@ export function wrapText(text: string, maxChars: number): string[] {
 
 export function exportFooter(byline?: string): string {
   const name = (byline ?? '').trim()
-  return name ? `NIGHT YARD · ${name}` : 'NIGHT YARD'
+  if (!name || name.toLowerCase() === 'night yard') return 'NIGHT YARD'
+  return `NIGHT YARD · ${name}`
 }
 
 function themeFor(style: ExportStyle): Theme {

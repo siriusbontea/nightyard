@@ -677,7 +677,7 @@ textarea { min-height: 96px; resize: vertical; }
   transform: rotate(-45deg);
 }
 .head-mark.bar { width: 22px; height: 4px; border-radius: 2px; background: #F4F1EA; }
-.head-mark.diamond { width: 12px; height: 12px; margin: 8px; background: #D6F25C; transform: rotate(45deg); }
+.head-mark.diamond { width: 16px; height: 16px; margin: 6px; background: #D6F25C; box-shadow: 0 0 0 1.5px #07140e; transform: rotate(45deg); }
 .about-link { text-decoration: none; color: inherit; }
 .kind-row {
   display: grid;

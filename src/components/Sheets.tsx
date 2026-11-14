@@ -560,7 +560,7 @@ export function MoreSheet(props: {
       <HeadKey />
       <a class="row-btn about-link" href="https://github.com/siriusbontea/nightyard" target="_blank" rel="noreferrer">
         About Night Yard
-        <small>A play designer you can learn without a grown-up. Version 1.2.0</small>
+        <small>A play designer you can learn without a grown-up. Version 1.2.1</small>
       </a>
       <p class="fine">A free account saves plays on every device. Plays already on this phone stay here.</p>
     </Sheet>

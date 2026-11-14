@@ -113,7 +113,6 @@ function trimStroke(stroke: Stroke, yards: number): Stroke {
 }
 
 function headMarkup(kind: HeadKind, tip: Point, dir: Point, ink: RouteInk, color: string, halo: string, zone: { rx: number; ry: number } | null, scale: number, print: boolean): string {
-  const round = (ink.phone ? 1 : 1) / Math.max(ink.stroke / 3.2, 0.2)
   if (kind === 'zone' && zone) {
     const fill = print ? 'none' : color
     const opacity = print ? '' : ' fill-opacity="0.18"'
@@ -155,8 +154,9 @@ function headMarkup(kind: HeadKind, tip: Point, dir: Point, ink: RouteInk, color
     const uy = dir.y / len
     const px = -uy
     const py = ux
-    const reach = ink.head * 0.42
-    const wide = ink.headWidth * 0.28
+    const unit = (ink.phone ? 3.2 : 4) / ink.stroke
+    const reach = (ink.phone ? 8 : 9) / unit
+    const wide = reach * 0.72
     const pts = [
       { x: tip.x + ux * reach, y: tip.y + uy * reach },
       { x: tip.x + px * wide, y: tip.y + py * wide },
@@ -164,7 +164,8 @@ function headMarkup(kind: HeadKind, tip: Point, dir: Point, ink: RouteInk, color
       { x: tip.x - px * wide, y: tip.y - py * wide },
     ]
     const d = `M${pts.map((point) => `${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(' L')} Z`
-    return `<path d="${d}" fill="${halo}" stroke="${halo}" stroke-width="${ink.halo.toFixed(2)}" stroke-linejoin="round"/><path d="${d}" fill="${color}" stroke="${color}" stroke-width="${(round * 0.4).toFixed(2)}" stroke-linejoin="round"/>`
+    const edge = (1.6 / unit).toFixed(2)
+    return `<path d="${d}" fill="${halo}" stroke="${halo}" stroke-width="${edge}" stroke-linejoin="round"/><path d="${d}" fill="${color}" stroke="${halo}" stroke-width="${(1.1 / unit).toFixed(2)}" stroke-linejoin="round"/>`
   }
   const d = arrowPath(tip, dir, ink.head, ink.headWidth)
   const haloPath = arrowPath(tip, dir, ink.head + ink.halo, ink.headWidth + ink.halo * 2)
@@ -192,7 +193,8 @@ function routeParts(stroke: Stroke, play: Play, camera: Camera, theme: Theme, se
   if (shown.points.length < 2) return { body: '', head: '' }
   const { w, h } = viewSize(camera)
   const ink = routeInk(pxPerUnit, pxPerUnit * w, false)
-  shown = settleEnds(shown, play, ink.head / camera.scale)
+  const diamondHalf = (ink.phone ? 8 : 9) / pxPerUnit / camera.scale
+  shown = settleEnds(shown, play, headKind(shown) === 'diamond' ? diamondHalf : ink.head / camera.scale)
   const weight = selected ? 1.25 : 1
   const color = routeColor(shown, play, theme)
   const halo = theme.outlineOnly ? '#ffffff' : theme.routeOutline
@@ -202,14 +204,16 @@ function routeParts(stroke: Stroke, play: Play, camera: Camera, theme: Theme, se
   const fieldDir = segmentTangent(prev, end, shown.curves[shown.curves.length - 1] ?? null, 1)
   const dir = { x: fieldDir.x, y: -fieldDir.y }
   const tip = keepTipOnField(fieldToSvg(end, camera), dir, ink.head * 0.55, w, h)
-  const trimYards = kind === 'zone' ? 0 : ink.trim / camera.scale
+  const trimYards = kind === 'zone' ? 0 : kind === 'diamond' ? (ink.phone ? 8 : 9) / pxPerUnit / camera.scale : ink.trim / camera.scale
   const bodyStroke = trimStroke(shown, trimYards)
   const d = pathD(bodyStroke, camera)
   const dashed = shown.kind === 'motion'
   const dash = dashed ? ` stroke-dasharray="${ink.motionOn.toFixed(2)} ${ink.motionOff.toFixed(2)}"` : ''
   const opacity = dim ? ' opacity="0.65"' : ''
   const start = fieldToSvg(bodyStroke.points[0], camera)
-  const haloW = ((ink.stroke + ink.halo * 2) * weight).toFixed(2)
+  const haloPad = kind === 'bar' ? ink.halo * 3.2 : ink.halo * 2
+  const haloW = ((ink.stroke + haloPad) * weight).toFixed(2)
+  const haloOpacity = kind === 'bar' ? '0.95' : '0.55'
   const innerW = (ink.stroke * weight).toFixed(2)
   const highlight = selected
     ? `<path d="${d}" fill="none" stroke="#ffffff" stroke-width="${ink.highlight.toFixed(2)}" stroke-linecap="butt" stroke-linejoin="round"${dash} opacity="0.9"/>`
@@ -230,7 +234,7 @@ function routeParts(stroke: Stroke, play: Play, camera: Camera, theme: Theme, se
   const attrs = `${shown.preset ? ` data-preset="${shown.preset}"` : ''}${isZonePreset(shown.preset) ? ' data-zone="1"' : ''}${opacity}`
   return {
     body: `<g data-layer="route" data-stroke-id="${shown.id}"${attrs}>
-      <path d="${d}" fill="none" stroke="${halo}" stroke-width="${haloW}" stroke-linecap="butt" stroke-linejoin="round"${dash} stroke-opacity="0.55"/>
+      <path d="${d}" fill="none" stroke="${halo}" stroke-width="${haloW}" stroke-linecap="butt" stroke-linejoin="round"${dash} stroke-opacity="${haloOpacity}"/>
       <path d="${d}" fill="none" stroke="${color}" stroke-width="${innerW}" stroke-linecap="butt" stroke-linejoin="round"${dash}/>
       ${highlight}${ball}
     </g>`,
@@ -273,14 +277,36 @@ function settleEnds(stroke: Stroke, play: Play, headYards: number): Stroke {
   const ux = dx / len
   const uy = dy / len
   const far = Math.max(len, min)
-  return {
-    ...stroke,
-    points: [
-      { x: center.x + ux * reach, y: center.y + uy * reach },
-      { x: center.x + ux * far, y: center.y + uy * far },
-    ],
-    curves: [null],
+  const start = { x: center.x + ux * reach, y: center.y + uy * reach }
+  const tip = clearOfPlayers(start, { x: center.x + ux * far, y: center.y + uy * far }, play, owner.id)
+  return { ...stroke, points: [start, tip], curves: [null] }
+}
+
+/** Slide a block stem sideways until it misses the other names. */
+function clearOfPlayers(start: Point, end: Point, play: Play, ownerId: string): Point {
+  let tip = { ...end }
+  for (let pass = 0; pass < 4; pass++) {
+    for (const player of play.players) {
+      if (player.id === ownerId) continue
+      const mark = plantedMarker(player)
+      const vx = tip.x - start.x
+      const vy = tip.y - start.y
+      const length2 = vx * vx + vy * vy
+      if (length2 < 0.04) continue
+      const t = Math.min(1, Math.max(0, ((mark.x - start.x) * vx + (mark.y - start.y) * vy) / length2))
+      const near = { x: start.x + vx * t, y: start.y + vy * t }
+      const ox = mark.x - near.x
+      const oy = mark.y - near.y
+      const gap = markerReach(player.shape) + 0.55
+      const away = Math.hypot(ox, oy)
+      if (away >= gap) continue
+      const px = away < 0.05 ? -vy / Math.sqrt(length2) : -ox / away
+      const py = away < 0.05 ? vx / Math.sqrt(length2) : -oy / away
+      const push = gap - away + 0.2
+      tip = { x: tip.x + px * push, y: tip.y + py * push }
+    }
   }
+  return tip
 }
 
 function clearOfMarkers(point: Point, play: Play): Point {
