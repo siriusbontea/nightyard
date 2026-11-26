@@ -41,15 +41,38 @@ describe('player markers', () => {
       const tag = labelTag(svg, player.label)
       expect(tag, player.label).toContain('y="0"')
       const size = fontSize(tag)
-      const widthRatio = player.shape === 'diamond' ? 0.7 : player.shape === 'square' ? 0.78 : 0.68
-      const widthBudget = radius * 2 * widthRatio
-      expect(size * Math.max(1, player.label.length) * 0.58, player.label).toBeLessThanOrEqual(widthBudget + 0.6)
+      expect(size, player.label).toBeCloseTo(labelFontSize(player.label, radius, player.shape), 1)
+      expect(size, player.label).toBeLessThanOrEqual(radius * (player.shape === 'diamond' ? 1.02 : 1.18) + 0.05)
+      expect(tag, player.label).toContain('font-weight="500"')
+      expect(tag, player.label).not.toContain('stroke=')
     }
     const renamed = createPlay({ format: '5v5', formationId: 'doubles' })
     const slot = renamed.players.find((player) => player.label === 'WR2')!
     slot.label = 'SLT'
     const sized = fieldMarkup({ play: renamed, camera: EXPORT_CAMERA, theme: NIGHT })
     expect(fontSize(labelTag(sized, 'SLT'))).toBeLessThan(fontSize(labelTag(sized, 'C')))
+  })
+
+  it('fits three-letter names inside a phone chip instead of stretching them', () => {
+    const play = setShowDefense(createPlay({ format: '11v11', formationId: 'shotgun-trips' }), true)
+    const camera = cameraForBox(393, 852, play.los)
+    const pxPerUnit = 363 / (FIELD_WIDTH * camera.scale)
+    const svg = fieldMarkup({ play, camera, theme: NIGHT, pxPerUnit })
+    const radius = PLAYER_R * camera.scale
+    for (const label of ['WR1', 'WR2', 'WR3', 'CB1', 'DE1', 'QB', 'C']) {
+      const player = play.players.find((item) => item.label === label)!
+      const tag = labelTag(svg, label)
+      const size = fontSize(tag)
+      expect(size, label).toBeCloseTo(labelFontSize(label, radius, player.shape), 1)
+      if (label.length >= 3) expect(size, label).toBeLessThan(radius * 0.95)
+      expect(tag, label).not.toContain('stroke=')
+    }
+    const dark = createPlay({ format: '11v11', formationId: 'shotgun-trips' })
+    const center = dark.players.find((player) => player.label === 'C')!
+    center.color = '#0b1220'
+    const night = fieldMarkup({ play: dark, camera, theme: NIGHT, pxPerUnit })
+    expect(labelTag(night, 'C')).toContain('stroke="#0c1220"')
+    expect(labelTag(night, 'C')).toContain('fill="#f8fafc"')
   })
 
   it('picks ink that contrasts with offense, defense, and print fills', () => {

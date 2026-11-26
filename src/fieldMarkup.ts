@@ -372,14 +372,46 @@ function relativeLuminance(hex: string): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b
 }
 
-/** Font size in SVG units so 1–4 character labels stay inside the marker. */
+/**
+ * Oswald 500 ink box in ems. Width is the widest real name of that
+ * length (W, WR, WR2, Wing). Height leaves room for Q and g.
+ */
+function labelAdvance(chars: number): { width: number; height: number } {
+  if (chars <= 1) return { width: 0.74, height: 0.92 }
+  if (chars === 2) return { width: 1.3, height: 0.92 }
+  if (chars === 3) return { width: 1.8, height: 0.92 }
+  return { width: 2.02, height: 1.02 }
+}
+
+/**
+ * Font size in SVG units so the ink stays inside the marker.
+ * A circle uses the corner of the letter box, not just the width,
+ * so three-letter names shrink instead of running into the rim.
+ */
 export function labelFontSize(label: string, radius: number, shape: Player['shape']): number {
   const chars = Math.min(4, Math.max(1, [...label].length))
-  const widthRatio = shape === 'diamond' ? 0.7 : shape === 'square' ? 0.78 : 0.68
-  const em = chars === 1 ? 0.7 : 0.58
-  const fromWidth = (radius * 2 * widthRatio) / (chars * em)
-  const fromHeight = radius * (shape === 'diamond' ? 0.98 : chars === 1 ? 1.18 : 0.98)
-  return Math.min(fromWidth, fromHeight)
+  const { width, height } = labelAdvance(chars)
+  let size: number
+  if (shape === 'square') {
+    const side = radius * 2 * 0.84
+    size = Math.min(side / width, (radius * 1.7) / height)
+  } else if (shape === 'diamond') {
+    const dx = radius * 0.92
+    size = Math.min((dx * 1.22) / width, (radius * 1.02) / height)
+  } else {
+    const inner = radius * 0.9
+    size = inner / Math.hypot(width / 2, height / 2)
+  }
+  const cap = radius * (shape === 'diamond' ? 1.02 : 1.18)
+  return Math.min(size, cap)
+}
+
+/** Light letters on a dark chip get a hairline halo. Dark letters on gold or lime stay fill-only, so the stroke does not fatten them. */
+function labelPaint(fill: string, pxPerUnit: number): string {
+  const ink = labelInk(fill)
+  if (relativeLuminance(fill) >= 0.28) return `fill="${ink}"`
+  const width = Math.max(0.4, 0.65 / Math.max(pxPerUnit, 0.04))
+  return `fill="${ink}" stroke="#0c1220" stroke-width="${width.toFixed(2)}" paint-order="stroke"`
 }
 
 function playerMarkup(player: Player, play: Play, camera: Camera, theme: Theme, selected: boolean, pxPerUnit: number, drawReady: boolean): { shape: string; label: string } {
@@ -404,10 +436,10 @@ function playerMarkup(player: Player, play: Play, camera: Camera, theme: Theme, 
   const ready = drawReady
     ? `<circle class="draw-ready" r="${(radius + 3.4).toFixed(1)}" fill="none" stroke="${ACCENT}" stroke-width="${Math.max(1.2, 1.75 / Math.max(pxPerUnit, 0.04)).toFixed(2)}"/>`
     : ''
-  const minLabel = 12 / Math.max(pxPerUnit, 0.04)
-  const size = Math.max(labelFontSize(player.label, radius, player.shape), Math.min(minLabel, radius * 1.05))
-  const haloPx = Math.max(1.1, 1.5 / Math.max(pxPerUnit, 0.04))
-  const label = `<text x="0" y="0" fill="${labelInk(fill)}" stroke="#0c1220" stroke-width="${haloPx.toFixed(2)}" paint-order="stroke" font-family="Oswald, Impact, sans-serif" font-size="${size.toFixed(1)}" font-weight="600" text-anchor="middle" dominant-baseline="central">${escapeXml(player.label)}</text>`
+  // The size is whatever fits the chip. A 12px floor used to push three-letter
+  // names past the rim on a phone, and a dark stroke on dark ink blurred them.
+  const size = labelFontSize(player.label, radius, player.shape)
+  const label = `<text x="0" y="0" ${labelPaint(fill, pxPerUnit)} font-family="Oswald, Impact, sans-serif" font-size="${size.toFixed(1)}" font-weight="500" text-anchor="middle" dominant-baseline="central">${escapeXml(player.label)}</text>`
   let badge = ''
   if (player.read && player.side === ourSideOf(play)) {
     const bx = radius * 0.82

@@ -1,6 +1,7 @@
 import dmRegularUrl from '@fontsource/dm-sans/files/dm-sans-latin-400-normal.woff2?url'
 import dmBoldUrl from '@fontsource/dm-sans/files/dm-sans-latin-700-normal.woff2?url'
 import oswaldUrl from '@fontsource/oswald/files/oswald-latin-600-normal.woff2?url'
+import oswaldMediumUrl from '@fontsource/oswald/files/oswald-latin-500-normal.woff2?url'
 import graduateUrl from '@fontsource/graduate/files/graduate-latin-400-normal.woff2?url'
 import { END_ZONE_COLOR, END_ZONE_LINE } from './endZoneArt'
 import { EXPORT_H, EXPORT_W, renderExportSvg, type ExportStyle } from './exportSvg'
@@ -21,15 +22,17 @@ function toBase64(buffer: ArrayBuffer): string {
 async function fontCss(): Promise<string> {
   if (!fontCssPromise) {
     fontCssPromise = (async () => {
-      const [regular, bold, display, graduate] = await Promise.all([
+      const [regular, bold, display, medium, graduate] = await Promise.all([
         fetch(dmRegularUrl).then((response) => response.arrayBuffer()),
         fetch(dmBoldUrl).then((response) => response.arrayBuffer()),
         fetch(oswaldUrl).then((response) => response.arrayBuffer()),
+        fetch(oswaldMediumUrl).then((response) => response.arrayBuffer()),
         fetch(graduateUrl).then((response) => response.arrayBuffer()),
       ])
       return `
         @font-face { font-family: 'DM Sans'; src: url(data:font/woff2;base64,${toBase64(regular)}) format('woff2'); font-weight: 400; font-style: normal; }
         @font-face { font-family: 'DM Sans'; src: url(data:font/woff2;base64,${toBase64(bold)}) format('woff2'); font-weight: 700; font-style: normal; }
+        @font-face { font-family: 'Oswald'; src: url(data:font/woff2;base64,${toBase64(medium)}) format('woff2'); font-weight: 500; font-style: normal; }
         @font-face { font-family: 'Oswald'; src: url(data:font/woff2;base64,${toBase64(display)}) format('woff2'); font-weight: 600; font-style: normal; }
         @font-face { font-family: 'Graduate'; src: url(data:font/woff2;base64,${toBase64(graduate)}) format('woff2'); font-weight: 400; font-style: normal; }
       `
